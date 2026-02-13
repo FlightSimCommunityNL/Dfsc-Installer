@@ -9,6 +9,14 @@ import fse from 'fs-extra'
 import type { InstallProgressEvent, ManifestAddon, ManifestAddonChannel } from '@shared/types'
 import { getTempBaseDir, verifyWritable } from './paths'
 
+/**
+ * ZIP layout support (common MSFS addon patterns):
+ * - /<package>/manifest.json
+ * - /<wrapper>/<package>/manifest.json
+ * - /Community/<package>/manifest.json
+ * - /<versioned-wrapper>/<package>/manifest.json
+ */
+
 export type ProgressSink = (evt: InstallProgressEvent) => void
 export type LogSink = (line: string) => void
 
@@ -52,63 +60,135 @@ async function listTopLevelDirs(dir: string): Promise<string[]> {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name)
 }
 
-async function resolveExtractionRoot(extractDir: string): Promise<string> {
-  // Common patterns:
-  // - zip contains package folders directly
-  // - zip contains a single wrapper folder
-  // - zip contains Community/<packages>
-  // We allow descending up to 2 levels.
-
-  let root = extractDir
-
-  for (let depth = 0; depth < 2; depth++) {
-    const topDirs = await listTopLevelDirs(root)
-
-    // If exactly one directory, treat as wrapper and descend.
-    if (topDirs.length === 1) {
-      const maybeWrapper = join(root, topDirs[0]!)
-      try {
-        const s = await stat(maybeWrapper)
-        if (s.isDirectory()) {
-          root = maybeWrapper
-          continue
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // If Community exists, prefer it.
-    if (topDirs.includes('Community')) {
-      root = join(root, 'Community')
-      continue
-    }
-
-    break
-  }
-
-  return root
+async function listTopLevelEntries(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true })
+  return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
 }
 
-async function detectPackageFolders(extractedRoot: string): Promise<string[]> {
-  // Prefer folders that look like MSFS Community packages (manifest.json at folder root).
-  const dirs = await listTopLevelDirs(extractedRoot)
-  const candidates: string[] = []
+async function buildCandidateRoots(extractDir: string): Promise<string[]> {
+  const roots: string[] = []
+  roots.push(extractDir)
 
-  for (const d of dirs) {
-    const manifestPath = join(extractedRoot, d, 'manifest.json')
-    if (await fse.pathExists(manifestPath)) candidates.push(d)
+  // If exactly one dir exists, treat as wrapper root.
+  try {
+    const topDirs = await listTopLevelDirs(extractDir)
+    if (topDirs.length === 1) roots.push(join(extractDir, topDirs[0]!))
+  } catch {
+    // ignore
   }
 
-  return candidates.length ? candidates : dirs
+  // If Community exists, treat that as a root.
+  try {
+    const topDirs = await listTopLevelDirs(extractDir)
+    if (topDirs.includes('Community')) roots.push(join(extractDir, 'Community'))
+  } catch {
+    // ignore
+  }
+
+  // De-dupe, preserve order.
+  const seen = new Set<string>()
+  return roots.filter((r) => {
+    const k = r.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
+
+async function isValidPackageFolder(folderPath: string): Promise<boolean> {
+  const manifestPath = join(folderPath, 'manifest.json')
+  if (!(await fse.pathExists(manifestPath))) return false
+  // layout.json is preferred but not required.
+  return true
+}
+
+async function findExpectedPackages(opts: {
+  extractDir: string
+  packageFolderNames: string[]
+  log: LogSink
+}): Promise<{ detectedRoot: string; packages: Array<{ folderName: string; srcPath: string }> }> {
+  const { extractDir, packageFolderNames, log } = opts
+
+  const candidateRoots = await buildCandidateRoots(extractDir)
+  log(`[installer] extractedRoot=${extractDir}`)
+  log(`[installer] candidate roots:`)
+  for (const r of candidateRoots) log(`  - ${r}`)
+
+  // For each root, try resolving each expected folder.
+  for (const root of candidateRoots) {
+    const found: Array<{ folderName: string; srcPath: string }> = []
+
+    // Also support "versioned wrapper" like /test-1.0.0/test by allowing one extra wrapper level.
+    let wrapperDirs: string[] = []
+    try {
+      wrapperDirs = await listTopLevelDirs(root)
+    } catch {
+      wrapperDirs = []
+    }
+
+    for (const folderName of packageFolderNames) {
+      const direct = join(root, folderName)
+      if (await isValidPackageFolder(direct)) {
+        found.push({ folderName, srcPath: direct })
+        continue
+      }
+
+      // Search one level down: <root>/<wrapper>/<folderName>
+      let matched: string | null = null
+      for (const w of wrapperDirs) {
+        const candidate = join(root, w, folderName)
+        if (await isValidPackageFolder(candidate)) {
+          matched = candidate
+          break
+        }
+      }
+
+      if (matched) found.push({ folderName, srcPath: matched })
+    }
+
+    if (found.length === packageFolderNames.length) {
+      log(`[installer] detected package root: ${root}`)
+      return { detectedRoot: root, packages: found }
+    }
+  }
+
+  // Not found.
+  const top = await listTopLevelEntries(extractDir).catch(() => [])
+  log(`[installer] ERROR: expected packages not found`)
+  log(`[installer] extractedRoot entries: ${top.join(', ') || '(unavailable)'}`)
+  log(`[installer] expected packageFolderNames: ${packageFolderNames.join(', ')}`)
+
+  const missing = packageFolderNames[0] ?? ''
+  throw new Error(
+    `Expected folder '${missing}' not found. ZIP must contain the folder name as listed in manifest.packageFolderNames, or adjust packageFolderNames to match the actual folder inside the ZIP.`
+  )
+}
+
+async function autoDetectPackages(opts: { extractDir: string; log: LogSink }): Promise<{ root: string; folderNames: string[] }> {
+  const { extractDir, log } = opts
+  const candidateRoots = await buildCandidateRoots(extractDir)
+
+  for (const root of candidateRoots) {
+    const dirs = await listTopLevelDirs(root).catch(() => [])
+    const hits: string[] = []
+    for (const d of dirs) {
+      if (await isValidPackageFolder(join(root, d))) hits.push(d)
+    }
+    if (hits.length) {
+      log(`[installer] detected package root: ${root}`)
+      log(`[installer] auto-detected packages: ${hits.join(', ')}`)
+      return { root, folderNames: hits }
+    }
+  }
+
+  return { root: extractDir, folderNames: [] }
 }
 
 async function atomicInstallFolders(opts: {
-  extractedRoot: string
+  packages: Array<{ folderName: string; srcPath: string }>
   communityPath: string
-  folderNames: string[]
 }): Promise<string[]> {
-  const { extractedRoot, communityPath, folderNames } = opts
+  const { packages, communityPath } = opts
 
   await verifyWritable(communityPath)
 
@@ -119,8 +199,8 @@ async function atomicInstallFolders(opts: {
   // If anything fails, rollback from backups.
 
   const stages: Array<{ folderName: string; src: string; dst: string; stage: string; backup: string }> =
-    folderNames.map((folderName) => {
-      const src = join(extractedRoot, folderName)
+    packages.map(({ folderName, srcPath }) => {
+      const src = srcPath
       const dst = join(communityPath, folderName)
       const stage = join(communityPath, `.${folderName}.dsfc-stage`)
       const backup = join(communityPath, `.${folderName}.dsfc-backup`)
@@ -252,19 +332,25 @@ export class AddonInstallerService {
     await mkdir(extractDir, { recursive: true })
     await extractZip(zipPath, { dir: extractDir })
 
-    const extractedRoot = await resolveExtractionRoot(extractDir)
+    // Determine packages to install.
+    let packages: Array<{ folderName: string; srcPath: string }> = []
 
-    const folderNames = addon.packageFolderNames?.length
-      ? addon.packageFolderNames
-      : await detectPackageFolders(extractedRoot)
-
-    if (!folderNames.length) throw new Error(`No package folders found for ${addon.id} after extraction`)
+    if (addon.packageFolderNames?.length) {
+      const res = await findExpectedPackages({ extractDir, packageFolderNames: addon.packageFolderNames, log: (l) => this.log(`[${addon.id}] ${l}`) })
+      packages = res.packages
+    } else {
+      const res = await autoDetectPackages({ extractDir, log: (l) => this.log(`[${addon.id}] ${l}`) })
+      if (!res.folderNames.length) {
+        throw new Error(`No package folders found for ${addon.id} after extraction`)
+      }
+      packages = res.folderNames.map((folderName) => ({ folderName, srcPath: join(res.root, folderName) }))
+    }
 
     this.log(`[${addon.id}] Installing to ${installPath}`)
-    this.log(`[${addon.id}] Package folders: ${folderNames.join(', ')}`)
+    this.log(`[${addon.id}] Package folders: ${packages.map((p) => p.folderName).join(', ')}`)
     emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
 
-    const installedPaths = await atomicInstallFolders({ extractedRoot, communityPath: installPath, folderNames })
+    const installedPaths = await atomicInstallFolders({ packages, communityPath: installPath })
 
     emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
     this.log(`[${addon.id}] Done`)

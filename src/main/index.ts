@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import { join } from 'path'
 import path from 'path'
 import { MACOS_TRAFFIC_LIGHT_POS } from '@shared/windowChrome'
@@ -17,6 +17,7 @@ let splashWindow: BrowserWindow | null = null
 
 function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
+  const isWin = process.platform === 'win32'
 
   const win = new BrowserWindow({
     show: false,
@@ -26,7 +27,16 @@ function createWindow(): BrowserWindow {
           titleBarStyle: 'hiddenInset' as const,
           trafficLightPosition: MACOS_TRAFFIC_LIGHT_POS,
         }
-      : {}),
+      : isWin
+        ? {
+            titleBarStyle: 'hidden' as const,
+            titleBarOverlay: {
+              color: '#101828',
+              symbolColor: '#ffffff',
+              height: 44,
+            },
+          }
+        : {}),
     width: 1220,
     height: 760,
     minWidth: 1024,
@@ -58,6 +68,11 @@ function splashSend(payload: any) {
 
 app.whenReady().then(async () => {
   const STARTUP_TIMEOUT_MS = 6_000
+
+  // Windows: remove default application menu bar (File/Edit/View/...).
+  if (process.platform === 'win32') {
+    Menu.setApplicationMenu(null)
+  }
 
   // Load hardcoded defaults + optional admin override before using manifest/updater URLs.
   const { initConfig } = await import('./config')

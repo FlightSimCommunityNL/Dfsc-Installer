@@ -9,14 +9,20 @@ export function TitleBar(props: { title?: string; offline?: boolean }) {
   return (
     <div
       className="dsfc-titlebar bg-bg-800 border-b border-border flex items-center overflow-hidden"
-      style={{ height: TITLEBAR_HEIGHT }}
+      style={{ height: TITLEBAR_HEIGHT, WebkitAppRegion: 'drag' as any }}
     >
       {/* macOS traffic lights live in the native titlebar; reserve space so UI never overlaps. */}
       <div className="dsfc-traffic-inset" style={{ width: insetX, flex: `0 0 ${insetX}px` }} />
 
       <div className="px-3 flex items-center gap-2 min-w-0">
-        <img src={dfscLogo} alt="DFSC" className="h-5 w-auto dsfc-no-drag" draggable={false} />
-        <div className="text-sm font-semibold text-text-100 dsfc-no-drag truncate">
+        <img
+          src={dfscLogo}
+          alt="DFSC"
+          className="h-5 w-auto dsfc-no-drag"
+          draggable={false}
+          style={{ WebkitAppRegion: 'no-drag' as any }}
+        />
+        <div className="text-sm font-semibold text-text-100 dsfc-no-drag truncate" style={{ WebkitAppRegion: 'no-drag' as any }}>
           {props.title ?? 'Dfsc Installer'}
         </div>
       </div>
@@ -24,7 +30,10 @@ export function TitleBar(props: { title?: string; offline?: boolean }) {
       <div className="flex-1" />
 
       {props.offline ? (
-        <div className="dsfc-no-drag mr-3 px-2 py-1 rounded-md border border-highlight/30 bg-highlight/10 text-highlight text-[11px]">
+        <div
+          className="dsfc-no-drag mr-3 px-2 py-1 rounded-md border border-highlight/30 bg-highlight/10 text-highlight text-[11px]"
+          style={{ WebkitAppRegion: 'no-drag' as any }}
+        >
           Offline
         </div>
       ) : null}
