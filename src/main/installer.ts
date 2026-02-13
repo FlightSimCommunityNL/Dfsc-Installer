@@ -60,6 +60,11 @@ async function listTopLevelDirs(dir: string): Promise<string[]> {
   return entries.filter((e) => e.isDirectory()).map((e) => e.name)
 }
 
+async function listImmediateChildrenWithTypes(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true })
+  return entries.map((e) => `${e.isDirectory() ? 'dir' : e.isFile() ? 'file' : 'other'}:${e.name}`)
+}
+
 async function listTopLevelEntries(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
   return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
@@ -226,13 +231,33 @@ async function findExpectedPackages(opts: {
 }): Promise<{ detectedRoot: string; packages: Array<{ folderName: string; srcPath: string }> }> {
   const { extractDir, packageFolderNames, log } = opts
 
+  const isWin = process.platform === 'win32'
+
   const candidateRoots = await buildCandidateRoots(extractDir)
-  log(`[installer] extractedRoot=${extractDir}`)
+  log(`[installer] extractDir=${extractDir}`)
+
+  try {
+    const top = await listImmediateChildrenWithTypes(extractDir)
+    log('[installer] top-level entries:')
+    for (const e of top) log(`  - ${e}`)
+  } catch {
+    log('[installer] top-level entries: (unavailable)')
+  }
+
   log(`[installer] candidate roots:`)
   for (const r of candidateRoots) log(`  - ${r}`)
 
   // For each root, try resolving each expected folder.
   for (const root of candidateRoots) {
+    log(`[installer] candidate root: ${root}`)
+    try {
+      const entries = await listImmediateChildrenWithTypes(root)
+      log('[installer] entries:')
+      for (const e of entries) log(`  - ${e}`)
+    } catch {
+      log('[installer] entries: (unavailable)')
+    }
+
     const found: Array<{ folderName: string; srcPath: string }> = []
 
     // Also support "versioned wrapper" like /test-1.0.0/test by allowing one extra wrapper level.
@@ -243,18 +268,50 @@ async function findExpectedPackages(opts: {
       wrapperDirs = []
     }
 
-    for (const folderName of packageFolderNames) {
-      const direct = join(root, folderName)
-      const v1 = await isValidPackageFolder(direct)
+    const rootDirNames = wrapperDirs
+
+    for (const expectedName of packageFolderNames) {
+      log('[installer] checking for expected folder:')
+      log(`  expected="${expectedName}"`)
+      log('  comparing against:')
+      for (const n of rootDirNames) log(`    "${n}"`)
+      log(`  caseSensitive=${isWin ? 'false' : 'true'}`)
+
+      const expectedPath = join(root, expectedName)
+      log(`  expectedPath=${expectedPath}`)
+
+      // Windows: case-insensitive directory name match.
+      let directPath = expectedPath
+      if (isWin) {
+        const match = rootDirNames.find((n) => n.toLowerCase() === expectedName.toLowerCase())
+        if (match) directPath = join(root, match)
+      }
+
+      const v1 = await isValidPackageFolder(directPath)
       if (v1.ok) {
-        found.push({ folderName, srcPath: direct })
+        log(`[installer] FOUND expected folder at ${directPath}`)
+        found.push({ folderName: expectedName, srcPath: directPath })
         continue
       }
 
-      // Search one level down: <root>/<wrapper>/<folderName>
+      // Search one level down: <root>/<wrapper>/<expected>
       let matched: string | null = null
       for (const w of wrapperDirs) {
-        const candidate = join(root, w, folderName)
+        // Compare within wrapper (case-insensitive on Windows)
+        let subDirs: string[] = []
+        try {
+          subDirs = await listTopLevelDirs(join(root, w))
+        } catch {
+          subDirs = []
+        }
+
+        let candidate = join(root, w, expectedName)
+        if (isWin) {
+          const match = subDirs.find((n) => n.toLowerCase() === expectedName.toLowerCase())
+          if (match) candidate = join(root, w, match)
+        }
+
+        log(`  tryingPath=${candidate}`)
         const v2 = await isValidPackageFolder(candidate)
         if (v2.ok) {
           matched = candidate
@@ -262,7 +319,10 @@ async function findExpectedPackages(opts: {
         }
       }
 
-      if (matched) found.push({ folderName, srcPath: matched })
+      if (matched) {
+        log(`[installer] FOUND expected folder at ${matched}`)
+        found.push({ folderName: expectedName, srcPath: matched })
+      }
     }
 
     if (found.length === packageFolderNames.length) {
@@ -484,6 +544,15 @@ export class AddonInstallerService {
 
     await mkdir(extractDir, { recursive: true })
     await extractZip(zipPath, { dir: extractDir })
+
+    this.log(`[${addon.id}] [installer] extractDir=${extractDir}`)
+    try {
+      const top = await listImmediateChildrenWithTypes(extractDir)
+      this.log(`[${addon.id}] [installer] top-level entries:`)
+      for (const e of top) this.log(`[${addon.id}] [installer]   - ${e}`)
+    } catch {
+      this.log(`[${addon.id}] [installer] top-level entries: (unavailable)`)
+    }
 
     // Determine packages to install.
     let packages: Array<{ folderName: string; srcPath: string }> = []
