@@ -6,6 +6,7 @@ export function SettingsModal(props: {
   t: (k: any) => string
 
   communityPath: string | null
+  autoDetectResult: string | null
   onBrowseCommunity: () => void
   onAutoDetectCommunity: () => void
   onTestCommunity: () => void
@@ -40,7 +41,10 @@ export function SettingsModal(props: {
           <div className="col-span-12">
             <div className="text-xs text-text-400 mb-1">{props.t('settings.communityFolder')}</div>
             <div className="flex items-center gap-2">
-              <div className="flex-1 bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate" title={props.communityPath ?? ''}>
+              <div
+                className="flex-1 bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate"
+                title={props.communityPath ?? ''}
+              >
                 {props.communityPath ?? props.t('common.notSet')}
               </div>
               <button
@@ -62,6 +66,9 @@ export function SettingsModal(props: {
                 {props.t('settings.testPath')}
               </button>
             </div>
+            {props.autoDetectResult ? (
+              <div className="mt-2 text-xs text-text-400">{props.autoDetectResult}</div>
+            ) : null}
           </div>
 
           <label className="col-span-6">

@@ -36,6 +36,7 @@ export function App() {
 
   const [showSettings, setShowSettings] = useState(false)
   const [msStorePkgDraft, setMsStorePkgDraft] = useState('')
+  const [autoDetectResult, setAutoDetectResult] = useState<string | null>(null)
   const [candidatesDraft, setCandidatesDraft] = useState('')
   const [themeDraft, setThemeDraft] = useState<'dark'>('dark')
   const [languageModeDraft, setLanguageModeDraft] = useState<'system' | 'en' | 'nl'>('system')
@@ -230,10 +231,17 @@ export function App() {
 
   const onAutoDetectCommunity = async () => {
     try {
-      await window.dsfc.community.detect()
+      const detected = await window.dsfc.community.detect()
       const next = await window.dsfc.settings.get()
       setState(next)
+
+      if (typeof detected === 'string' && detected) {
+        setAutoDetectResult(`${t('settings.autoDetect.found')} ${detected}`)
+      } else {
+        setAutoDetectResult(t('settings.autoDetect.notFound'))
+      }
     } catch (e: any) {
+      setAutoDetectResult(t('settings.autoDetect.notFound'))
       setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
     }
   }
@@ -330,6 +338,7 @@ export function App() {
         onClose={() => setShowSettings(false)}
         t={t}
         communityPath={state?.settings.communityPath ?? null}
+        autoDetectResult={autoDetectResult}
         onBrowseCommunity={onBrowseCommunity}
         onAutoDetectCommunity={onAutoDetectCommunity}
         onTestCommunity={onTestCommunity}

@@ -89,6 +89,8 @@ export const en = {
   'settings.subtitle': 'Community folder + preferences',
   'settings.communityFolder': 'MSFS Community folder',
   'settings.autoDetect': 'Auto-detect',
+  'settings.autoDetect.found': 'Found:',
+  'settings.autoDetect.notFound': 'Not found',
   'settings.browse': 'Browse…',
   'settings.testPath': 'Test Path',
   'settings.testPath.ok': 'Path is writable',

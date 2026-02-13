@@ -105,11 +105,43 @@ app.whenReady().then(async () => {
   async function runUpdateGate(): Promise<boolean> {
     splashSend({ phase: 'checking', message: splashLang === 'nl' ? 'Controleren op updates…' : 'Checking for updates…' })
 
+    const { owner, repo } = getGitHubReleasesOwnerRepo()
+    const placeholder =
+      !owner ||
+      !repo ||
+      owner.toUpperCase().includes('PLACEHOLDER') ||
+      repo.toUpperCase().includes('PLACEHOLDER')
+
+    if (placeholder) {
+      if (!app.isPackaged || process.env.NODE_ENV === 'development') {
+        console.log('[updates] skipped: not configured (placeholders)')
+      }
+      splashSend({
+        phase: 'not-available',
+        message: splashLang === 'nl' ? 'Updates niet geconfigureerd' : 'Updates not configured',
+      })
+      // brief UX pause, then continue
+      await new Promise((r) => setTimeout(r, 400))
+      return true
+    }
+
     const { autoUpdater } = updater
     autoUpdater.autoDownload = true
 
-    const { owner, repo } = getGitHubReleasesOwnerRepo()
     autoUpdater.setFeedURL({ provider: 'github', owner, repo })
+
+    const isLikelyOffline = (msg: string) => {
+      const m = msg.toLowerCase()
+      return (
+        m.includes('enetunreach') ||
+        m.includes('eai_again') ||
+        m.includes('enotfound') ||
+        m.includes('ecconnrefused') ||
+        m.includes('econnrefused') ||
+        m.includes('etimedout') ||
+        m.includes('network')
+      )
+    }
 
     return new Promise<boolean>((resolve) => {
       const cleanup = () => {
@@ -157,14 +189,36 @@ app.whenReady().then(async () => {
 
       autoUpdater.on('error', (err) => {
         cleanup()
-        splashSend({ phase: 'error', message: err?.message ?? String(err) })
+        const raw = err?.message ?? String(err)
+        if (!app.isPackaged || process.env.NODE_ENV === 'development') {
+          console.warn('[updates] error:', raw)
+        }
+        const friendly = isLikelyOffline(raw)
+          ? splashLang === 'nl'
+            ? 'Geen internetverbinding'
+            : 'No internet connection'
+          : splashLang === 'nl'
+            ? 'Updatecontrole mislukt'
+            : 'Update check failed'
+        splashSend({ phase: 'error', message: friendly })
         // fail open
         setTimeout(() => resolve(true), 600)
       })
 
       autoUpdater.checkForUpdates().catch((e: any) => {
         cleanup()
-        splashSend({ phase: 'error', message: e?.message ?? String(e) })
+        const raw = e?.message ?? String(e)
+        if (!app.isPackaged || process.env.NODE_ENV === 'development') {
+          console.warn('[updates] checkForUpdates failed:', raw)
+        }
+        const friendly = isLikelyOffline(raw)
+          ? splashLang === 'nl'
+            ? 'Geen internetverbinding'
+            : 'No internet connection'
+          : splashLang === 'nl'
+            ? 'Updatecontrole mislukt'
+            : 'Update check failed'
+        splashSend({ phase: 'error', message: friendly })
         setTimeout(() => resolve(true), 600)
       })
     })

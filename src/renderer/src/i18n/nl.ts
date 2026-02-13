@@ -89,6 +89,8 @@ export const nl = {
   'settings.subtitle': 'Community-map + voorkeuren',
   'settings.communityFolder': 'MSFS Community-map',
   'settings.autoDetect': 'Auto-detect',
+  'settings.autoDetect.found': 'Gevonden:',
+  'settings.autoDetect.notFound': 'Niet gevonden',
   'settings.browse': 'Bladeren…',
   'settings.testPath': 'Test pad',
   'settings.testPath.ok': 'Pad is schrijfbaar',
