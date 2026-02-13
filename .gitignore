@@ -1,0 +1,96 @@
+# =========================
+# Node
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json.bak
+
+# =========================
+# Build output
+# =========================
+dist/
+out/
+build/
+release/
+app/dist/
+app/out/
+
+# Electron / electron-builder
+*.exe
+*.dmg
+*.AppImage
+*.snap
+*.deb
+*.rpm
+*.msi
+*.blockmap
+*.zip
+*.tar.gz
+
+# Electron unpacked builds
+*-unpacked/
+win-unpacked/
+mac-unpacked/
+linux-unpacked/
+
+# =========================
+# Vite / bundler cache
+# =========================
+.vite/
+.cache/
+.esbuild/
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# =========================
+# Electron user data (dev)
+# =========================
+/user-data/
+/electron-data/
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Coverage
+# =========================
+coverage/
+
+# =========================
+# Optional: ignore local NAS test data
+# =========================
+/nas-test/
+/local-addons/

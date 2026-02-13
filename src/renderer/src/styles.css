@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+
+  /* DFSC theme tokens (RGB triplets for Tailwind opacity support) */
+  --bg-900: 11 18 32;       /* ~#0B1220 */
+  --bg-800: 16 24 40;       /* #101828 (Dark Navy) */
+  --bg-700: 22 32 54;       /* slightly lifted panel */
+
+  --panel: 16 24 40;        /* #101828 */
+  --border: 31 44 86;       /* #1F2C56 (Deep Blue) used subtly */
+
+  --text-100: 229 231 235;
+  --text-200: 203 213 225;
+  --text-400: 148 163 184;
+
+  --accent: 243 112 33;     /* #F37021 Accent Orange */
+  --accent2: 31 44 86;      /* #1F2C56 Deep Blue */
+  --highlight: 249 164 64;  /* #F9A440 Sun Orange/Yellow */
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+* { box-sizing: border-box; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #1f2a37; border-radius: 999px; }
+
+/* Custom titlebar (for macOS titleBarStyle: hiddenInset) */
+.dsfc-titlebar {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.dsfc-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Area under macOS traffic lights: must not steal clicks or dragging. */
+.dsfc-traffic-inset {
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
