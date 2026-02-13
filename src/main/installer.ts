@@ -95,11 +95,47 @@ async function buildCandidateRoots(extractDir: string): Promise<string[]> {
   })
 }
 
-async function isValidPackageFolder(folderPath: string): Promise<boolean> {
+async function isValidPackageFolder(folderPath: string): Promise<{ ok: boolean; hasManifest: boolean; hasLayout: boolean }> {
   const manifestPath = join(folderPath, 'manifest.json')
-  if (!(await fse.pathExists(manifestPath))) return false
-  // layout.json is preferred but not required.
-  return true
+  const layoutPath = join(folderPath, 'layout.json')
+  const hasManifest = await fse.pathExists(manifestPath)
+  const hasLayout = await fse.pathExists(layoutPath)
+  return { ok: hasManifest, hasManifest, hasLayout }
+}
+
+async function scanForPackages(opts: {
+  root: string
+  maxDepth: number
+}): Promise<Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }>> {
+  const out: Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }> = []
+
+  async function walk(current: string, depth: number) {
+    if (depth > opts.maxDepth) return
+
+    let entries: any[] = []
+    try {
+      entries = await readdir(current, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    for (const ent of entries) {
+      if (!ent.isDirectory || !ent.isDirectory()) continue
+      const name = String(ent.name ?? '')
+      const p = join(current, name)
+
+      const v = await isValidPackageFolder(p)
+      if (v.ok) {
+        out.push({ folderName: name, folderPath: p, hasManifest: v.hasManifest, hasLayout: v.hasLayout })
+        continue
+      }
+
+      await walk(p, depth + 1)
+    }
+  }
+
+  await walk(opts.root, 0)
+  return out
 }
 
 async function findExpectedPackages(opts: {
@@ -128,7 +164,8 @@ async function findExpectedPackages(opts: {
 
     for (const folderName of packageFolderNames) {
       const direct = join(root, folderName)
-      if (await isValidPackageFolder(direct)) {
+      const v1 = await isValidPackageFolder(direct)
+      if (v1.ok) {
         found.push({ folderName, srcPath: direct })
         continue
       }
@@ -137,7 +174,8 @@ async function findExpectedPackages(opts: {
       let matched: string | null = null
       for (const w of wrapperDirs) {
         const candidate = join(root, w, folderName)
-        if (await isValidPackageFolder(candidate)) {
+        const v2 = await isValidPackageFolder(candidate)
+        if (v2.ok) {
           matched = candidate
           break
         }
@@ -152,15 +190,45 @@ async function findExpectedPackages(opts: {
     }
   }
 
-  // Not found.
+  // Fallback: auto-detect MSFS packages (bounded recursive scan).
   const top = await listTopLevelEntries(extractDir).catch(() => [])
-  log(`[installer] ERROR: expected packages not found`)
+  log(`[installer] expected folder(s) missing; attempting auto-detection (maxDepth=3)`)
   log(`[installer] extractedRoot entries: ${top.join(', ') || '(unavailable)'}`)
-  log(`[installer] expected packageFolderNames: ${packageFolderNames.join(', ')}`)
 
-  const missing = packageFolderNames[0] ?? ''
+  const detectedAll: Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }> = []
+  for (const root of candidateRoots) {
+    const hits = await scanForPackages({ root, maxDepth: 3 })
+    if (hits.length) {
+      log(`[installer] auto-detect root=${root} hits=${hits.length}`)
+      for (const h of hits) {
+        log(`  - ${h.folderName} @ ${h.folderPath} (manifest=${h.hasManifest ? 'yes' : 'no'} layout=${h.hasLayout ? 'yes' : 'no'})`)
+      }
+    }
+    detectedAll.push(...hits)
+  }
+
+  // De-dupe by full path.
+  const seen = new Set<string>()
+  const detected = detectedAll.filter((h) => {
+    const k = h.folderPath.toLowerCase()
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+
+  if (detected.length === 1) {
+    const only = detected[0]!
+    log(`[installer] expected folder(s) missing, auto-detected package: ${only.folderName}`)
+    return { detectedRoot: extractDir, packages: [{ folderName: only.folderName, srcPath: only.folderPath }] }
+  }
+
+  const detectedNames = detected.map((d) => d.folderName)
+  const expected = packageFolderNames.join(', ')
+  const detectedList = detected.map((d) => `${d.folderName} (${d.folderPath})`).join(', ')
+
   throw new Error(
-    `Expected folder '${missing}' not found. ZIP must contain the folder name as listed in manifest.packageFolderNames, or adjust packageFolderNames to match the actual folder inside the ZIP.`
+    `Expected folder(s) not found: [${expected}]. Detected packages: [${detectedNames.join(', ') || 'none'}]. ` +
+      `Set manifest.packageFolderNames to one of: ${detectedList || '(none found)'} or fix the ZIP structure.`
   )
 }
 
@@ -304,6 +372,7 @@ export class AddonInstallerService {
       )
     }
 
+    this.log(`[installer] installing addonId=${addon.id} channel=${channelKey} expectedFolders=${(addon.packageFolderNames ?? []).join(',')}`)
     this.log(`[${addon.id}] Downloading ${downloadUrl}`)
     emitProgress(this.progress, { addonId: addon.id, phase: 'downloading', percent: 0 })
 
