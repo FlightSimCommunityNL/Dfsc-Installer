@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { createWriteStream } from 'fs'
 import { mkdir, readdir, rm, stat } from 'fs/promises'
-import { join } from 'path'
+import { join, basename } from 'path'
 import { request } from 'undici'
 import extractZip from 'extract-zip'
 import fse from 'fs-extra'
@@ -121,6 +121,46 @@ async function isValidPackageFolder(folderPath: string): Promise<{ ok: boolean; 
   const hasManifest = await fse.pathExists(manifestPath)
   const hasLayout = await fse.pathExists(layoutPath)
   return { ok: hasManifest, hasManifest, hasLayout }
+}
+
+async function findManifestDirWithin(opts: { root: string; maxDepth: number; maxDirsVisited: number }): Promise<string | null> {
+  let dirsVisited = 0
+  const SKIP_NAMES = new Set(['node_modules', '__macosx', '.git', '.svn', '.hg'])
+
+  async function walk(current: string, depth: number): Promise<string | null> {
+    if (depth > opts.maxDepth) return null
+
+    let entries: any[] = []
+    try {
+      entries = await readdir(current, { withFileTypes: true })
+    } catch {
+      return null
+    }
+
+    // If manifest.json is present in this directory, return it.
+    for (const ent of entries) {
+      if (ent.isFile && ent.isFile() && String(ent.name ?? '').toLowerCase() === 'manifest.json') {
+        return current
+      }
+    }
+
+    for (const ent of entries) {
+      if (!ent.isDirectory || !ent.isDirectory()) continue
+      const name = String(ent.name ?? '')
+      const lower = name.toLowerCase()
+      if (name.startsWith('.') || SKIP_NAMES.has(lower)) continue
+
+      dirsVisited++
+      if (dirsVisited > opts.maxDirsVisited) return null
+
+      const res = await walk(join(current, name), depth + 1)
+      if (res) return res
+    }
+
+    return null
+  }
+
+  return walk(opts.root, 0)
 }
 
 async function scanForPackages(opts: {
@@ -277,22 +317,71 @@ async function findExpectedPackages(opts: {
       for (const n of rootDirNames) log(`    "${n}"`)
       log(`  caseSensitive=${isWin ? 'false' : 'true'}`)
 
-      const expectedPath = join(root, expectedName)
+      const endsWithExpected = basename(root).toLowerCase() === expectedName.toLowerCase()
+      const expectedPath = endsWithExpected ? root : join(root, expectedName)
       log(`  expectedPath=${expectedPath}`)
 
-      // Windows: case-insensitive directory name match.
+      const tryResolveAt = async (p: string): Promise<string | null> => {
+        // First try direct folder-level manifest.
+        const v = await isValidPackageFolder(p)
+        if (v.ok) return p
+
+        // If not present at that level, search within p for manifest.json up to depth 3.
+        const manifestDir = await findManifestDirWithin({ root: p, maxDepth: 3, maxDirsVisited: 3_000 })
+        if (manifestDir) {
+          log(`[installer] manifest.json found at ${join(manifestDir, 'manifest.json')}, using packageRoot=${manifestDir}`)
+          return manifestDir
+        }
+
+        return null
+      }
+
+      // Windows: case-insensitive directory name match at root level.
       let directPath = expectedPath
-      if (isWin) {
+      if (!endsWithExpected && isWin) {
         const match = rootDirNames.find((n) => n.toLowerCase() === expectedName.toLowerCase())
         if (match) directPath = join(root, match)
       }
 
-      const v1 = await isValidPackageFolder(directPath)
-      if (v1.ok) {
-        log(`[installer] FOUND expected folder at ${directPath}`)
-        found.push({ folderName: expectedName, srcPath: directPath })
+      // Targeted debug: existence probes for common nesting.
+      const probePaths = [
+        join(root, 'manifest.json'),
+        join(root, 'layout.json'),
+        join(root, expectedName, 'manifest.json'),
+        join(root, expectedName, 'layout.json'),
+      ]
+      for (const pp of probePaths) {
+        const ok = await fse.pathExists(pp)
+        log(`  probe exists=${ok ? 'yes' : 'no'} path=${pp}`)
+      }
+
+      // If expectedPath exists, dump its immediate children too.
+      try {
+        const rootChildren = await listImmediateChildrenWithTypes(root)
+        log('  candidateRoot children:')
+        for (const e of rootChildren) log(`    - ${e}`)
+      } catch {
+        // ignore
+      }
+
+      if (await fse.pathExists(directPath)) {
+        try {
+          const expectedChildren = await listImmediateChildrenWithTypes(directPath)
+          log('  expectedPath children:')
+          for (const e of expectedChildren) log(`    - ${e}`)
+        } catch {
+          // ignore
+        }
+      }
+
+      const resolvedDirect = await tryResolveAt(directPath)
+      if (resolvedDirect) {
+        log(`[installer] FOUND expected folder at ${resolvedDirect}`)
+        found.push({ folderName: expectedName, srcPath: resolvedDirect })
         continue
       }
+
+      log(`  tryingPath=${directPath}`)
 
       // Search one level down: <root>/<wrapper>/<expected>
       let matched: string | null = null
@@ -312,9 +401,9 @@ async function findExpectedPackages(opts: {
         }
 
         log(`  tryingPath=${candidate}`)
-        const v2 = await isValidPackageFolder(candidate)
-        if (v2.ok) {
-          matched = candidate
+        const resolved = await tryResolveAt(candidate)
+        if (resolved) {
+          matched = resolved
           break
         }
       }
