@@ -473,6 +473,115 @@ function assertUnder(baseDir: string, p: string) {
   }
 }
 
+async function resolveRawInstallSources(opts: {
+  addonId: string
+  extractDir: string
+  expectedFolderNames?: string[]
+  workDir: string
+  log: LogSink
+}): Promise<Array<{ folderName: string; srcPath: string }>> {
+  const { addonId, extractDir, expectedFolderNames, workDir, log } = opts
+  const isWin = process.platform === 'win32'
+
+  if (expectedFolderNames?.length) {
+    const candidateRoots = await buildCandidateRoots(extractDir)
+    log(`[installer] raw install: candidate roots:`)
+    for (const r of candidateRoots) log(`  - ${r}`)
+
+    const packages: Array<{ folderName: string; srcPath: string }> = []
+
+    for (const expectedName of expectedFolderNames) {
+      let foundPath: string | null = null
+
+      for (const root of candidateRoots) {
+        const endsWithExpected = basename(root).toLowerCase() === expectedName.toLowerCase()
+        const expectedPath = endsWithExpected ? root : join(root, expectedName)
+
+        // Case-insensitive exact folder match at root level (Windows).
+        let directPath = expectedPath
+        if (!endsWithExpected && isWin) {
+          const dirs = await listTopLevelDirs(root).catch(() => [])
+          const match = dirs.find((n) => n.toLowerCase() === expectedName.toLowerCase())
+          if (match) directPath = join(root, match)
+        }
+
+        if (await fse.pathExists(directPath)) {
+          try {
+            const s = await stat(directPath)
+            if (s.isDirectory()) {
+              foundPath = directPath
+              break
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // One wrapper level: <root>/<wrapper>/<expected>
+        const wrapperDirs = await listTopLevelDirs(root).catch(() => [])
+        for (const w of wrapperDirs) {
+          const baseW = join(root, w)
+          const subDirs = await listTopLevelDirs(baseW).catch(() => [])
+          let candidate = join(baseW, expectedName)
+          if (isWin) {
+            const match = subDirs.find((n) => n.toLowerCase() === expectedName.toLowerCase())
+            if (match) candidate = join(baseW, match)
+          }
+          if (await fse.pathExists(candidate)) {
+            try {
+              const s = await stat(candidate)
+              if (s.isDirectory()) {
+                foundPath = candidate
+                break
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        if (foundPath) break
+      }
+
+      if (!foundPath) {
+        await printTree({ root: extractDir, log, maxDepth: 3, maxEntriesPerDir: 50 })
+        throw new Error(
+          `RAW MODE: could not locate folder '${expectedName}'. ` +
+            `Set packageFolderNames to match the ZIP folder(s), or fix the ZIP structure.`
+        )
+      }
+
+      assertUnder(extractDir, foundPath)
+      packages.push({ folderName: expectedName, srcPath: foundPath })
+    }
+
+    return packages
+  }
+
+  // No explicit folders: install the extracted content as-is.
+  const entries = await readdir(extractDir, { withFileTypes: true }).catch(() => [])
+  const dirs = entries.filter((e) => e.isDirectory())
+  const files = entries.filter((e) => e.isFile())
+
+  if (dirs.length === 1 && files.length === 0) {
+    const name = dirs[0]!.name
+    return [{ folderName: name, srcPath: join(extractDir, name) }]
+  }
+
+  // Bundle everything into <installPath>/<addonId>/
+  const rawRoot = join(workDir, 'rawroot')
+  await mkdir(rawRoot, { recursive: true })
+
+  for (const ent of entries) {
+    const name = String(ent.name ?? '')
+    // basic sanitization
+    if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) continue
+    await fse.copy(join(extractDir, name), join(rawRoot, name))
+  }
+
+  return [{ folderName: addonId, srcPath: rawRoot }]
+}
+
 async function findRawFolders(opts: {
   extractDir: string
   expectedFolderNames: string[]
@@ -487,72 +596,14 @@ async function findRawFolders(opts: {
 
   const packages: Array<{ folderName: string; srcPath: string }> = []
 
-  for (const expectedName of expectedFolderNames) {
-    let foundPath: string | null = null
-
-    for (const root of candidateRoots) {
-      const endsWithExpected = basename(root).toLowerCase() === expectedName.toLowerCase()
-      const expectedPath = endsWithExpected ? root : join(root, expectedName)
-
-      // Case-insensitive exact folder match at root level (Windows).
-      let directPath = expectedPath
-      if (!endsWithExpected && isWin) {
-        const dirs = await listTopLevelDirs(root).catch(() => [])
-        const match = dirs.find((n) => n.toLowerCase() === expectedName.toLowerCase())
-        if (match) directPath = join(root, match)
-      }
-
-      if (await fse.pathExists(directPath)) {
-        try {
-          const s = await stat(directPath)
-          if (s.isDirectory()) {
-            foundPath = directPath
-            break
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      // One wrapper level: <root>/<wrapper>/<expected>
-      const wrapperDirs = await listTopLevelDirs(root).catch(() => [])
-      for (const w of wrapperDirs) {
-        const baseW = join(root, w)
-        const subDirs = await listTopLevelDirs(baseW).catch(() => [])
-        let candidate = join(baseW, expectedName)
-        if (isWin) {
-          const match = subDirs.find((n) => n.toLowerCase() === expectedName.toLowerCase())
-          if (match) candidate = join(baseW, match)
-        }
-        if (await fse.pathExists(candidate)) {
-          try {
-            const s = await stat(candidate)
-            if (s.isDirectory()) {
-              foundPath = candidate
-              break
-            }
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      if (foundPath) break
-    }
-
-    if (!foundPath) {
-      await printTree({ root: extractDir, log, maxDepth: 3, maxEntriesPerDir: 50 })
-      throw new Error(
-        `Raw install: expected folder '${expectedName}' not found anywhere in extracted ZIP. ` +
-          `Set packageFolderNames to match the ZIP folder(s), or fix the ZIP structure.`
-      )
-    }
-
-    assertUnder(extractDir, foundPath)
-    packages.push({ folderName: expectedName, srcPath: foundPath })
-  }
-
-  return packages
+  // Backwards-compat wrapper used by earlier implementation.
+  return resolveRawInstallSources({
+    addonId: 'addon',
+    extractDir: opts.extractDir,
+    expectedFolderNames: opts.expectedFolderNames,
+    workDir: opts.extractDir,
+    log: opts.log,
+  })
 }
 
 async function autoDetectPackages(opts: { extractDir: string; log: LogSink }): Promise<{ root: string; folderNames: string[] }> {
@@ -733,59 +784,59 @@ export class AddonInstallerService {
       this.log(`[${addon.id}] [installer] top-level entries: (unavailable)`)
     }
 
-    // Determine install units.
+    // Deterministic mode selection MUST happen before any strict package detection.
+    this.log(
+      `[installer] addonId=${addon.id} allowRawInstall=${addon.allowRawInstall === true ? 'true' : 'false'} expectedFolders=${(
+        addon.packageFolderNames ?? []
+      ).join(',')}`
+    )
+
+    if (addon.allowRawInstall === true) {
+      this.log(`[installer] allowRawInstall=true -> using RAW install mode`)
+
+      const packages = await resolveRawInstallSources({
+        addonId: addon.id,
+        extractDir,
+        expectedFolderNames: addon.packageFolderNames,
+        workDir,
+        log: (l) => this.log(`[${addon.id}] ${l}`),
+      })
+
+      this.log(`[${addon.id}] Installing to ${installPath}`)
+      this.log(`[${addon.id}] Raw install folders: ${packages.map((p) => p.folderName).join(', ')}`)
+      emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
+
+      const installedPaths = await atomicInstallFolders({ packages, communityPath: installPath })
+
+      emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
+      this.log(`[${addon.id}] Done`)
+
+      // Best-effort cleanup
+      try {
+        await rm(workDir, { recursive: true, force: true })
+      } catch {
+        // ignore
+      }
+
+      return { installedPaths, installedVersion: channel.version }
+    }
+
+    // STRICT MSFS package install mode (default)
     let packages: Array<{ folderName: string; srcPath: string }> = []
 
-    if (addon.allowRawInstall) {
-      this.log(`[${addon.id}] [installer] raw install mode enabled`)
-
-      if (addon.packageFolderNames?.length) {
-        packages = await findRawFolders({
-          extractDir,
-          expectedFolderNames: addon.packageFolderNames,
-          log: (l) => this.log(`[${addon.id}] ${l}`),
-        })
-      } else {
-        // No explicit folders: install the extracted content as-is.
-        const entries = await readdir(extractDir, { withFileTypes: true }).catch(() => [])
-        const dirs = entries.filter((e) => e.isDirectory())
-        const files = entries.filter((e) => e.isFile())
-
-        if (dirs.length === 1 && files.length === 0) {
-          const name = dirs[0]!.name
-          const srcPath = join(extractDir, name)
-          packages = [{ folderName: name, srcPath }]
-        } else {
-          // Bundle everything into <installPath>/<addonId>/
-          const rawRoot = join(workDir, 'rawroot')
-          await mkdir(rawRoot, { recursive: true })
-
-          for (const ent of entries) {
-            const name = String(ent.name ?? '')
-            // basic sanitization
-            if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) continue
-            await fse.copy(join(extractDir, name), join(rawRoot, name))
-          }
-
-          packages = [{ folderName: addon.id, srcPath: rawRoot }]
-        }
-      }
+    if (addon.packageFolderNames?.length) {
+      const res = await findExpectedPackages({
+        extractDir,
+        packageFolderNames: addon.packageFolderNames,
+        log: (l) => this.log(`[${addon.id}] ${l}`),
+      })
+      packages = res.packages
     } else {
-      // Strict MSFS package install mode (default)
-      if (addon.packageFolderNames?.length) {
-        const res = await findExpectedPackages({
-          extractDir,
-          packageFolderNames: addon.packageFolderNames,
-          log: (l) => this.log(`[${addon.id}] ${l}`),
-        })
-        packages = res.packages
-      } else {
-        const res = await autoDetectPackages({ extractDir, log: (l) => this.log(`[${addon.id}] ${l}`) })
-        if (!res.folderNames.length) {
-          throw new Error(`No package folders found for ${addon.id} after extraction`)
-        }
-        packages = res.folderNames.map((folderName) => ({ folderName, srcPath: join(res.root, folderName) }))
+      const res = await autoDetectPackages({ extractDir, log: (l) => this.log(`[${addon.id}] ${l}`) })
+      if (!res.folderNames.length) {
+        throw new Error(`No package folders found for ${addon.id} after extraction`)
       }
+      packages = res.folderNames.map((folderName) => ({ folderName, srcPath: join(res.root, folderName) }))
     }
 
     this.log(`[${addon.id}] Installing to ${installPath}`)

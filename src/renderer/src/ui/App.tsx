@@ -137,6 +137,14 @@ export function App() {
     [addons, selectedAddonId]
   )
 
+  useEffect(() => {
+    if (!selectedAddon) return
+    // dev-friendly debug hint: confirm allowRawInstall value from manifest makes it to UI
+    console.log(
+      `[ui] selected addon id=${selectedAddon.id} allowRawInstall=${selectedAddon.allowRawInstall === true ? 'true' : 'false'}`
+    )
+  }, [selectedAddon?.id])
+
   const installedRec = selectedAddon && state ? state.installed[selectedAddon.id] : undefined
 
   useEffect(() => {

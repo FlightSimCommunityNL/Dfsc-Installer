@@ -80,6 +80,13 @@ export async function fetchManifest(
       return { manifest: empty, mode: 'online' }
     }
 
+    if (IS_DEV) {
+      for (const a of json.addons ?? []) {
+        const anyAddon = a as any
+        console.log(`[manifest] addon id=${a.id} allowRawInstall=${anyAddon?.allowRawInstall === true ? 'true' : 'false'}`)
+      }
+    }
+
     memCache = { url: manifestUrl, at: Date.now(), manifest: json }
 
     // persist cache
