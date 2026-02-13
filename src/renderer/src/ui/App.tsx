@@ -37,6 +37,7 @@ export function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [msStorePkgDraft, setMsStorePkgDraft] = useState('')
   const [autoDetectResult, setAutoDetectResult] = useState<string | null>(null)
+  const [installPathResult, setInstallPathResult] = useState<string | null>(null)
   const [candidatesDraft, setCandidatesDraft] = useState('')
   const [themeDraft, setThemeDraft] = useState<'dark'>('dark')
   const [languageModeDraft, setLanguageModeDraft] = useState<'system' | 'en' | 'nl'>('system')
@@ -168,8 +169,8 @@ export function App() {
   const requestInstallOrUpdate = (action: 'install' | 'update') => {
     setConfirmAction(action)
 
-    const communityPath = state?.settings.communityPath ?? null
-    if (!communityPath) {
+    const installPath = (state?.settings.installPath ?? state?.settings.communityPath) ?? null
+    if (!installPath) {
       setCommunityRequiredOpen(true)
       return
     }
@@ -226,6 +227,41 @@ export function App() {
       setState(next)
     } catch (e: any) {
       setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
+    }
+  }
+
+  const onBrowseInstallPath = async () => {
+    try {
+      const picked = await (window.dsfc as any).installPath.browse()
+      const next = await window.dsfc.settings.get()
+      setState(next)
+      if (typeof picked === 'string' && picked) {
+        setInstallPathResult(`${t('settings.installPath.found')} ${picked}`)
+      }
+    } catch (e: any) {
+      setInstallPathResult(t('settings.installPath.notFound'))
+      setLogLines((prev) => [...prev, `[installPath] ERROR: ${e?.message ?? String(e)}`])
+    }
+  }
+
+  const onUseCommunityForInstallPath = async () => {
+    try {
+      await (window.dsfc as any).installPath.useCommunityFolder()
+      const next = await window.dsfc.settings.get()
+      setState(next)
+      const resolved = (next.settings.installPath ?? next.settings.communityPath) as string | null
+      if (resolved) setInstallPathResult(`${t('settings.installPath.found')} ${resolved}`)
+    } catch (e: any) {
+      setLogLines((prev) => [...prev, `[installPath] ERROR: ${e?.message ?? String(e)}`])
+    }
+  }
+
+  const onTestInstallPath = async () => {
+    try {
+      await (window.dsfc as any).installPath.test()
+      setInstallPathResult(t('settings.installPath.test.ok'))
+    } catch (e: any) {
+      setInstallPathResult(t('settings.installPath.test.fail'))
     }
   }
 
@@ -297,7 +333,7 @@ export function App() {
           t={t}
           selectedChannel={channel}
           installed={installedRec}
-          communityPathSet={!!state?.settings.communityPath}
+          installPathSet={!!(state?.settings.installPath ?? state?.settings.communityPath)}
           progress={currentProgress ? { phase: currentProgress.phase, percent: currentProgress.percent } : undefined}
           onRequestInstallOrUpdate={requestInstallOrUpdate}
           onUninstall={onUninstall}
@@ -314,7 +350,7 @@ export function App() {
         open={confirmOpen}
         t={t}
         action={confirmAction}
-        communityPath={state?.settings.communityPath ?? null}
+        installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
         requiredBytes={requiredBytes}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={async () => {
@@ -338,10 +374,16 @@ export function App() {
         onClose={() => setShowSettings(false)}
         t={t}
         communityPath={state?.settings.communityPath ?? null}
+        installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
+        installPathMode={(state?.settings.installPathMode as any) ?? 'followCommunity'}
         autoDetectResult={autoDetectResult}
+        installPathResult={installPathResult}
         onBrowseCommunity={onBrowseCommunity}
         onAutoDetectCommunity={onAutoDetectCommunity}
         onTestCommunity={onTestCommunity}
+        onBrowseInstallPath={onBrowseInstallPath}
+        onUseCommunityForInstallPath={onUseCommunityForInstallPath}
+        onTestInstallPath={onTestInstallPath}
         msStorePackageFamilyName={msStorePkgDraft}
         setMsStorePackageFamilyName={setMsStorePkgDraft}
         candidates={candidatesDraft}

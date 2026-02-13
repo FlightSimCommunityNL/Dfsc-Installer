@@ -60,6 +60,7 @@ export const nl = {
   'install.uninstall': 'Verwijderen',
   'install.updateAvailableHint': 'Update beschikbaar voor het geselecteerde kanaal.',
   'install.setCommunityHint': 'Stel je Community-map in via Settings.',
+  'install.setInstallPathHint': 'Stel je Installatiepad in via Instellingen.',
 
   // Offline
   'offline.usingCached': 'Offline modus: cached data wordt gebruikt',
@@ -88,6 +89,13 @@ export const nl = {
   'settings.title': 'Instellingen',
   'settings.subtitle': 'Community-map + voorkeuren',
   'settings.communityFolder': 'MSFS Community-map',
+  'settings.installPath': 'Installatiepad',
+  'settings.useCommunityFolder': 'Gebruik Community-map',
+  'settings.installPath.found': 'Gevonden:',
+  'settings.installPath.notFound': 'Niet gevonden',
+  'settings.installPath.test': 'Test installatiepad',
+  'settings.installPath.test.ok': 'Installatiepad is schrijfbaar',
+  'settings.installPath.test.fail': 'Test installatiepad mislukt',
   'settings.autoDetect': 'Auto-detect',
   'settings.autoDetect.found': 'Gevonden:',
   'settings.autoDetect.notFound': 'Niet gevonden',

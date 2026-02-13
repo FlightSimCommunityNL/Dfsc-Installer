@@ -199,11 +199,12 @@ export class AddonInstallerService {
   async installAddon(params: {
     addon: ManifestAddon
     channel: ManifestAddonChannel
-    communityPath: string
+    channelKey: string
+    installPath: string
   }): Promise<{ installedPaths: string[]; installedVersion: string }> {
-    const { addon, channel, communityPath } = params
+    const { addon, channel, installPath, channelKey } = params
 
-    const tempBase = join(getTempBaseDir(), 'dsfc-installer')
+    const tempBase = join(getTempBaseDir(), 'dfsc-installer')
     await mkdir(tempBase, { recursive: true })
 
     const workDir = join(tempBase, `${addon.id}-${Date.now()}`)
@@ -212,10 +213,21 @@ export class AddonInstallerService {
 
     await mkdir(workDir, { recursive: true })
 
-    this.log(`[${addon.id}] Downloading ${channel.zipUrl}`)
+    const downloadUrl = channel.zipUrl ?? channel.url
+    if (process.env.NODE_ENV === 'development') {
+      this.log(`[${addon.id}] [install] resolved downloadUrl=${downloadUrl ?? ''}`)
+    }
+
+    if (typeof downloadUrl !== 'string' || !downloadUrl.trim() || !/^https?:\/\//i.test(downloadUrl.trim())) {
+      throw new Error(
+        `Invalid download URL for addon ${addon.id} channel ${channelKey}. Expected channel.zipUrl (preferred) or channel.url.`
+      )
+    }
+
+    this.log(`[${addon.id}] Downloading ${downloadUrl}`)
     emitProgress(this.progress, { addonId: addon.id, phase: 'downloading', percent: 0 })
 
-    await downloadToFile(channel.zipUrl, zipPath, ({ transferred, total }) => {
+    await downloadToFile(downloadUrl, zipPath, ({ transferred, total }) => {
       const percent = total ? Math.round((transferred / total) * 100) : undefined
       emitProgress(this.progress, {
         addonId: addon.id,
@@ -248,11 +260,11 @@ export class AddonInstallerService {
 
     if (!folderNames.length) throw new Error(`No package folders found for ${addon.id} after extraction`)
 
-    this.log(`[${addon.id}] Installing to ${communityPath}`)
+    this.log(`[${addon.id}] Installing to ${installPath}`)
     this.log(`[${addon.id}] Package folders: ${folderNames.join(', ')}`)
     emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
 
-    const installedPaths = await atomicInstallFolders({ extractedRoot, communityPath, folderNames })
+    const installedPaths = await atomicInstallFolders({ extractedRoot, communityPath: installPath, folderNames })
 
     emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
     this.log(`[${addon.id}] Done`)

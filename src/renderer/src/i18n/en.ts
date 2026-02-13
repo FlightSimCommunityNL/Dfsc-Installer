@@ -60,6 +60,7 @@ export const en = {
   'install.uninstall': 'Uninstall',
   'install.updateAvailableHint': 'Update available for the selected channel.',
   'install.setCommunityHint': 'Set your Community folder in Settings.',
+  'install.setInstallPathHint': 'Set your Install path in Settings.',
 
   // Offline
   'offline.usingCached': 'Offline mode: using cached data',
@@ -88,6 +89,13 @@ export const en = {
   'settings.title': 'Settings',
   'settings.subtitle': 'Community folder + preferences',
   'settings.communityFolder': 'MSFS Community folder',
+  'settings.installPath': 'Install path',
+  'settings.useCommunityFolder': 'Use Community Folder',
+  'settings.installPath.found': 'Found:',
+  'settings.installPath.notFound': 'Not found',
+  'settings.installPath.test': 'Test Install Path',
+  'settings.installPath.test.ok': 'Install path is writable',
+  'settings.installPath.test.fail': 'Install path test failed',
   'settings.autoDetect': 'Auto-detect',
   'settings.autoDetect.found': 'Found:',
   'settings.autoDetect.notFound': 'Not found',

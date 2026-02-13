@@ -9,7 +9,10 @@ export interface ManifestCategory {
 export interface ManifestAddonChannel {
   key: AddonChannelKey
   version: string
-  zipUrl: string
+  /** Preferred download URL (zip). */
+  zipUrl?: string
+  /** Legacy/compat download URL (zip). */
+  url?: string
   sha256: string
   /** Download size (zip). */
   sizeBytes?: number
@@ -49,6 +52,10 @@ export interface InstalledAddonRecord {
 
 export interface AppSettings {
   communityPath: string | null
+
+  /** Install destination (defaults to Community). */
+  installPath?: string | null
+  installPathMode?: 'followCommunity' | 'custom'
 
   /** Windows-only detection knobs (still allow manual browse). */
   windowsMsStorePackageFamilyName?: string

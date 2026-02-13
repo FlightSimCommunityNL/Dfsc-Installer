@@ -7,6 +7,9 @@ export const IPC = {
   COMMUNITY_DETECT: 'community:detect',
   COMMUNITY_TEST: 'community:test',
 
+  INSTALL_PATH_BROWSE: 'installPath:browse',
+  INSTALL_PATH_TEST: 'installPath:test',
+
   MANIFEST_FETCH: 'manifest:fetch',
 
   RELEASE_NOTES_FETCH: 'releaseNotes:fetch',

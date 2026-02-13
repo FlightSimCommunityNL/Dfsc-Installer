@@ -5,6 +5,9 @@ const defaults: LocalState = {
   settings: {
     communityPath: null,
 
+    installPathMode: 'followCommunity',
+    installPath: null,
+
     windowsMsStorePackageFamilyName: 'Microsoft.FlightSimulator_8wekyb3d8bbwe',
     windowsCommunityCandidates: [],
 
@@ -26,7 +29,17 @@ export function getState(): LocalState {
 
 export function setSettings(patch: Partial<LocalState['settings']>): LocalState {
   const current = store.store
-  store.set('settings', { ...current.settings, ...patch })
+  const merged = { ...current.settings, ...patch }
+
+  // Ensure defaults for new installPath settings.
+  if (!merged.installPathMode) merged.installPathMode = 'followCommunity'
+
+  // If mode is followCommunity, installPath mirrors communityPath.
+  if (merged.installPathMode === 'followCommunity') {
+    merged.installPath = merged.communityPath
+  }
+
+  store.set('settings', merged)
   return store.store
 }
 

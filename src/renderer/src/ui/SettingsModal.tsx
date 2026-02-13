@@ -6,10 +6,19 @@ export function SettingsModal(props: {
   t: (k: any) => string
 
   communityPath: string | null
+  installPath: string | null
+  installPathMode: 'followCommunity' | 'custom'
+
   autoDetectResult: string | null
+  installPathResult: string | null
+
   onBrowseCommunity: () => void
   onAutoDetectCommunity: () => void
   onTestCommunity: () => void
+
+  onBrowseInstallPath: () => void
+  onUseCommunityForInstallPath: () => void
+  onTestInstallPath: () => void
 
   msStorePackageFamilyName: string
   setMsStorePackageFamilyName: (v: string) => void
@@ -68,6 +77,45 @@ export function SettingsModal(props: {
             </div>
             {props.autoDetectResult ? (
               <div className="mt-2 text-xs text-text-400">{props.autoDetectResult}</div>
+            ) : null}
+          </div>
+
+          <div className="col-span-12">
+            <div className="text-xs text-text-400 mb-1">{props.t('settings.installPath')}</div>
+            <div className="flex items-center gap-2">
+              <div
+                className="flex-1 bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate"
+                title={props.installPath ?? ''}
+              >
+                {props.installPath ?? props.t('common.notSet')}
+              </div>
+              <button
+                onClick={props.onBrowseInstallPath}
+                className="px-3 py-2 rounded-md border border-border bg-bg-800 text-sm hover:bg-bg-700"
+              >
+                {props.t('settings.browse')}
+              </button>
+              <button
+                onClick={props.onUseCommunityForInstallPath}
+                disabled={!props.communityPath}
+                className={
+                  `px-3 py-2 rounded-md border border-border bg-bg-800 text-sm hover:bg-bg-700 ` +
+                  (!props.communityPath ? 'opacity-50 cursor-not-allowed' : '')
+                }
+              >
+                {props.t('settings.useCommunityFolder')}
+              </button>
+              <button
+                onClick={props.onTestInstallPath}
+                className="px-3 py-2 rounded-md border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30"
+              >
+                {props.t('settings.installPath.test')}
+              </button>
+            </div>
+            {props.installPathMode === 'custom' ? (
+              <div className="mt-2 text-xs text-text-400">{props.installPathResult ?? ''}</div>
+            ) : props.installPathResult ? (
+              <div className="mt-2 text-xs text-text-400">{props.installPathResult}</div>
             ) : null}
           </div>
 

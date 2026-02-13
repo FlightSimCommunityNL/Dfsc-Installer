@@ -11,7 +11,7 @@ export function InstallConfirmModal(props: {
   open: boolean
   t: (k: any) => string
   action: 'install' | 'update'
-  communityPath: string | null
+  installPath: string | null
   requiredBytes: number
   onCancel: () => void
   onConfirm: () => void
@@ -22,18 +22,18 @@ export function InstallConfirmModal(props: {
 
   useEffect(() => {
     if (!props.open) return
-    if (!props.communityPath) return
+    if (!props.installPath) return
 
     setLoading(true)
     setDisk(null)
     setDiskError(null)
 
     window.dsfc.system
-      .getDiskSpace(props.communityPath)
+      .getDiskSpace(props.installPath)
       .then((res) => setDisk(res))
       .catch((e: any) => setDiskError(e?.message ?? String(e)))
       .finally(() => setLoading(false))
-  }, [props.open, props.communityPath])
+  }, [props.open, props.installPath])
 
   const afterBytes = useMemo(() => {
     const free = disk?.freeBytes
@@ -67,8 +67,8 @@ export function InstallConfirmModal(props: {
         <div className="p-4 grid grid-cols-12 gap-3">
           <div className="col-span-12">
             <div className="text-xs text-text-400 mb-1">{props.t('installConfirm.installTo')}</div>
-            <div className="bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate" title={props.communityPath ?? ''}>
-              {props.communityPath ?? props.t('common.notSet')}
+            <div className="bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate" title={props.installPath ?? ''}>
+              {props.installPath ?? props.t('common.notSet')}
             </div>
           </div>
 
@@ -105,7 +105,7 @@ export function InstallConfirmModal(props: {
           </button>
           <button
             onClick={props.onConfirm}
-            disabled={!props.communityPath || !!diskError || insufficient || loading || !disk}
+            disabled={!props.installPath || !!diskError || insufficient || loading || !disk}
             className={
               `px-4 py-2 rounded-xl bg-accent text-black text-sm font-semibold transition ` +
               (!props.communityPath || !!diskError || insufficient || loading || !disk ? ' opacity-40 cursor-not-allowed' : 'hover:brightness-110')

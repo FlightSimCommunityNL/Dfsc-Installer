@@ -46,6 +46,11 @@ Configurable settings:
 - `manifestBaseUrl` (defaults to `https://nas.example.com/addons`)
 - `updateBaseUrl` (defaults to `https://nas.example.com/app-updates`)
 - `communityPath` (selected by user)
+- `installPath` (destination for installs; defaults to Community when `installPathMode=followCommunity`)
+
+Manifest channel download URL:
+- `zipUrl` is preferred
+- `url` is accepted for backward compatibility
 
 ## NAS folder structure (addons)
 Example layout (you can change URLs; the app reads `manifest.json`):

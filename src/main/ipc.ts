@@ -17,7 +17,7 @@ import { getDiskSpaceForPath } from './diskspace'
 
 import fse from 'fs-extra'
 import { getState, setInstalled, setSettings, store } from './store'
-import { browseForCommunityPath, detectCommunityPathWindows, verifyWritable } from './paths'
+import { browseForCommunityPath, browseForInstallPath, detectCommunityPathWindows, verifyWritable } from './paths'
 import { fetchManifest } from './manifest'
 import { getAddonManifestUrl } from './config'
 import { AddonInstallerService } from './installer'
@@ -77,6 +77,25 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return true
   })
 
+  ipcMain.handle(IPC.INSTALL_PATH_BROWSE, async () => {
+    const win = getWin()
+    if (!win) return null
+    const picked = await browseForInstallPath(win)
+    if (!picked) return null
+    await verifyWritable(picked)
+    setSettings({ installPath: picked, installPathMode: 'custom' })
+    return picked
+  })
+
+  ipcMain.handle(IPC.INSTALL_PATH_TEST, async () => {
+    const s = store.get('settings')
+    const p = (s.installPath ?? s.communityPath) as string | null
+    if (!p) throw new Error('Install path not set')
+    if (!(await fse.pathExists(p))) throw new Error('Path does not exist')
+    await verifyWritable(p)
+    return true
+  })
+
   ipcMain.handle(IPC.MANIFEST_FETCH, async (_evt, args: IpcManifestFetchArgs) => {
     const url = args?.url ?? getAddonManifestUrl()
     lastManifestUrl = url
@@ -99,10 +118,10 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
 
   ipcMain.handle(IPC.ADDON_RECONCILE, async () => {
     const state = getState()
-    const communityPath = state.settings.communityPath
+    const basePath = state.settings.installPath ?? state.settings.communityPath
 
-    // If Community isn't set, just prune missing paths from stored state.
-    if (!communityPath) {
+    // If installPath/communityPath isn't set, just prune missing paths from stored state.
+    if (!basePath) {
       const installed = { ...state.installed }
       for (const [addonId, rec] of Object.entries(installed)) {
         const exists = await Promise.all(rec.installedPaths.map((p) => fse.pathExists(p)))
@@ -115,13 +134,13 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl()))
     lastManifest = manifest
 
-    // Scan Community folder: top-level directories.
+    // Scan install path folder: top-level directories.
     let communityDirs: string[] = []
     try {
-      const entries = await fse.readdir(communityPath, { withFileTypes: true })
+      const entries = await fse.readdir(basePath, { withFileTypes: true })
       communityDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
     } catch (err: any) {
-      sendLog(getWin, `[community] ERROR reading Community folder: ${err?.message ?? String(err)}`)
+      sendLog(getWin, `[installPath] ERROR reading install folder: ${err?.message ?? String(err)}`)
       return getState()
     }
 
@@ -129,7 +148,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     const folderMeta = new Map<string, { installedVersion?: string }>()
     await Promise.all(
       communityDirs.map(async (dir) => {
-        const manifestPath = joinPath(communityPath, dir, 'manifest.json')
+        const manifestPath = joinPath(basePath, dir, 'manifest.json')
         try {
           if (!(await fse.pathExists(manifestPath))) return
           const json = await fse.readJson(manifestPath)
@@ -196,7 +215,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       }
 
       // Update paths to current observed folders under Community.
-      const observedPaths = observedFolders.map((f) => joinPath(communityPath, f))
+      const observedPaths = observedFolders.map((f) => joinPath(basePath, f))
       const missing = await Promise.all(observedPaths.map((p) => fse.pathExists(p)))
       const validObservedPaths = observedPaths.filter((_, i) => missing[i])
 
@@ -224,7 +243,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     for (const [addonId, folders] of foundByAddon.entries()) {
       if (nextState.installed[addonId]) continue
 
-      const installedPaths = folders.map((f) => joinPath(communityPath, f))
+      const installedPaths = folders.map((f) => joinPath(basePath, f))
       const exists = await Promise.all(installedPaths.map((p) => fse.pathExists(p)))
       const valid = installedPaths.filter((_, i) => exists[i])
       if (!valid.length) continue
@@ -257,8 +276,8 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
   ipcMain.handle(IPC.ADDON_INSTALL, async (_evt, args: IpcAddonInstallArgs) => {
     try {
       const state = getState()
-      const communityPath = state.settings.communityPath
-      if (!communityPath) throw new Error('Community folder not set')
+      const installPath = state.settings.installPath ?? state.settings.communityPath
+      if (!installPath) throw new Error('Install path not set')
 
       const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl()))
       const addon = manifest.addons.find((a) => a.id === args.addonId)
@@ -267,7 +286,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       const channel = addon.channels[args.channel] as ManifestAddonChannel | undefined
       if (!channel) throw new Error(`Channel not available: ${args.channel}`)
 
-      const result = await installer.installAddon({ addon, channel, communityPath })
+      const result = await installer.installAddon({ addon, channel, installPath, channelKey: args.channel })
       setInstalled(addon.id, {
         addonId: addon.id,
         channel: args.channel,

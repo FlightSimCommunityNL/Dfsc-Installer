@@ -13,6 +13,15 @@ export async function browseForCommunityPath(win: Electron.BrowserWindow): Promi
   return res.filePaths[0] ?? null
 }
 
+export async function browseForInstallPath(win: Electron.BrowserWindow): Promise<string | null> {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Select install folder',
+    properties: ['openDirectory'],
+  })
+  if (res.canceled) return null
+  return res.filePaths[0] ?? null
+}
+
 export async function verifyWritable(dir: string): Promise<void> {
   await access(dir, constants.W_OK)
 }

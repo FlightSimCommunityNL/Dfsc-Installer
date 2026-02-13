@@ -13,7 +13,7 @@ export function ActionsPane(props: {
   addon: ManifestAddon | null
   selectedChannel: AddonChannelKey
   installed: InstalledAddonRecord | undefined
-  communityPathSet: boolean
+  installPathSet: boolean
   progress: { phase: string; percent?: number } | undefined
   onRequestInstallOrUpdate: (action: 'install' | 'update') => void
   onUninstall: () => Promise<void>
@@ -75,7 +75,7 @@ export function ActionsPane(props: {
       primaryLabel: 'Update',
       updateAvailable: true,
     }
-  }, [props.addon, props.selectedChannel, props.installed, props.communityPathSet])
+  }, [props.addon, props.selectedChannel, props.installed, props.installPathSet])
 
   return (
     <div className="h-full min-h-0 min-w-0 w-[220px] bg-bg-800 border-l border-border flex flex-col overflow-hidden">
@@ -189,9 +189,9 @@ export function ActionsPane(props: {
               </button>
             </div>
 
-            {!props.communityPathSet ? (
+            {!props.installPathSet ? (
               <div className="mt-3 text-[11px] text-text-400">
-                {props.t('install.setCommunityHint')}
+                {props.t('install.setInstallPathHint')}
               </div>
             ) : null}
           </div>

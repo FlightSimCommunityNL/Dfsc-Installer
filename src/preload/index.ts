@@ -21,6 +21,11 @@ const api = {
     detect: () => ipcRenderer.invoke(IPC.COMMUNITY_DETECT),
     test: () => ipcRenderer.invoke(IPC.COMMUNITY_TEST),
   },
+  installPath: {
+    browse: () => ipcRenderer.invoke(IPC.INSTALL_PATH_BROWSE),
+    test: () => ipcRenderer.invoke(IPC.INSTALL_PATH_TEST),
+    useCommunityFolder: () => ipcRenderer.invoke(IPC.SETTINGS_SET, { installPathMode: 'followCommunity' }),
+  },
   manifest: {
     fetch: (args?: IpcManifestFetchArgs) => ipcRenderer.invoke(IPC.MANIFEST_FETCH, args ?? {}),
   },
