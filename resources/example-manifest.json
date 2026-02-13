@@ -12,6 +12,7 @@
       "categoryId": "liveries",
       "bannerUrl": "https://nas.example.com/addons/assets/a320-dsfc-banner.jpg",
       "packageFolderNames": ["dsfc-livery-a320-dutch"],
+      "allowRawInstall": true,
       "channels": {
         "stable": {
           "key": "stable",

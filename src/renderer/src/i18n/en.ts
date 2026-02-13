@@ -61,6 +61,7 @@ export const en = {
   'install.updateAvailableHint': 'Update available for the selected channel.',
   'install.setCommunityHint': 'Set your Community folder in Settings.',
   'install.setInstallPathHint': 'Set your Install path in Settings.',
+  'install.rawInstallHint': 'This addon ZIP does not look like an MSFS package. For testing, enable allowRawInstall in the manifest for this addon.',
 
   // Offline
   'offline.usingCached': 'Offline mode: using cached data',

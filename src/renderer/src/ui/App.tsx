@@ -151,7 +151,16 @@ export function App() {
       const next = await window.dsfc.settings.get()
       setState(next)
     } catch (e: any) {
-      setLogLines((prev) => [...prev, `[install] ERROR: ${e?.message ?? String(e)}`])
+      const msg = e?.message ?? String(e)
+      setLogLines((prev) => [...prev, `[install] ERROR: ${msg}`])
+
+      const looksLikePackageDetectionFailure =
+        typeof msg === 'string' &&
+        (msg.includes('No package folders found') || msg.includes('Expected folder') || msg.includes('Detected packages:'))
+
+      if (selectedAddon && !selectedAddon.allowRawInstall && looksLikePackageDetectionFailure) {
+        setLogLines((prev) => [...prev, `[install] HINT: ${t('install.rawInstallHint')}`])
+      }
     }
   }
 

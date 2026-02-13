@@ -61,6 +61,7 @@ export const nl = {
   'install.updateAvailableHint': 'Update beschikbaar voor het geselecteerde kanaal.',
   'install.setCommunityHint': 'Stel je Community-map in via Settings.',
   'install.setInstallPathHint': 'Stel je Installatiepad in via Instellingen.',
+  'install.rawInstallHint': 'Deze addon-ZIP lijkt geen MSFS package te bevatten. Voor testen kun je allowRawInstall inschakelen in de manifest voor deze addon.',
 
   // Offline
   'offline.usingCached': 'Offline modus: cached data wordt gebruikt',

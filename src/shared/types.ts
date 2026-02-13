@@ -31,6 +31,8 @@ export interface ManifestAddon {
   // One addon can install one-or-more folders into the Community directory.
   // If omitted, installer will infer from extracted top-level folders.
   packageFolderNames?: string[]
+  /** Allow "raw" installs for ZIPs that don't contain MSFS package manifests (manifest.json/layout.json). */
+  allowRawInstall?: boolean
   channels: Record<AddonChannelKey, ManifestAddonChannel | undefined>
 }
 
