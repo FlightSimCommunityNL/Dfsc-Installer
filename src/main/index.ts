@@ -57,6 +57,8 @@ function splashSend(payload: any) {
 }
 
 app.whenReady().then(async () => {
+  const STARTUP_TIMEOUT_MS = 6_000
+
   // Load hardcoded defaults + optional admin override before using manifest/updater URLs.
   const { initConfig } = await import('./config')
   await initConfig()
@@ -79,6 +81,7 @@ app.whenReady().then(async () => {
     loadUrl: rendererUrl,
     lang: splashLang,
   })
+  console.log('[startup] splash shown')
 
   // Splash IPC actions
   ipcMain.handle(IPC.SPLASH_QUIT, async () => {
@@ -87,20 +90,57 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle(IPC.SPLASH_RETRY_CONNECTIVITY, async () => {
-    await runManifestGate({ allowBlock: true })
+    // Retry manifest fetch, but never block opening the main window.
+    void runManifestGate({ allowBlock: false })
     return true
   })
 
   splashSend({ phase: 'starting', message: splashLang === 'nl' ? 'Opstarten…' : 'Starting…' })
 
-  // Packaged: gated updates first.
-  if (app.isPackaged) {
-    const okToContinue = await runUpdateGate()
-    if (!okToContinue) return // will quitAndInstall
+  let startupError: any = null
+  const startupTimeout = setTimeout(() => {
+    console.warn('[startup] timeout fallback triggered')
+    try {
+      openMainAndCloseSplash()
+    } catch (e: any) {
+      console.error('[startup] timeout openMain failed', e)
+    }
+  }, STARTUP_TIMEOUT_MS)
+
+  try {
+    // In dev we still show splash, but never block the main window.
+
+    if (app.isPackaged) {
+      try {
+        await promiseWithTimeout(runUpdateGate(), 4_500, 'update gate')
+      } catch (err) {
+        console.error('[updater error]', err)
+      }
+    }
+
+    try {
+      console.log('[startup] manifest start')
+      await promiseWithTimeout(fetchManifest(getAddonManifestUrl(), 0, 5_000), 5_500, 'manifest fetch')
+      console.log('[startup] manifest done')
+    } catch (err) {
+      console.error('[manifest error]', err)
+      startupError = err
+    }
+  } catch (err) {
+    console.error('[unexpected startup error]', err)
+    startupError = err
+  } finally {
+    clearTimeout(startupTimeout)
+    console.log('[startup] opening main window')
+    try {
+      openMainAndCloseSplash()
+    } catch (e: any) {
+      console.error('[startup] openMain failed', e)
+    }
+    console.log('[startup] splash closed')
   }
 
-  // Then gate on addon manifest connectivity/cache.
-  await runManifestGate({ allowBlock: true })
+  void startupError
 
   async function runUpdateGate(): Promise<boolean> {
     splashSend({ phase: 'checking', message: splashLang === 'nl' ? 'Controleren op updates…' : 'Checking for updates…' })
@@ -229,27 +269,53 @@ app.whenReady().then(async () => {
 
     try {
       // Use the same code path as the app (fetchManifest). It already supports cached offline fallback.
-      await fetchManifest(getAddonManifestUrl(), 0, 5_000)
+      console.log('[startup] manifest start')
+      await promiseWithTimeout(fetchManifest(getAddonManifestUrl(), 0, 5_000), 5_500, 'manifest fetch')
+      console.log('[startup] manifest done')
+      if (!opts.allowBlock) return
       openMainAndCloseSplash()
     } catch (e: any) {
-      // If no cached manifest exists, fetchManifest will throw.
-      splashSend({ phase: 'offline-blocked', message: e?.message ?? String(e) })
-      if (!opts.allowBlock) {
-        // fail open (unused, but here for completeness)
-        openMainAndCloseSplash()
-      }
+      console.error('[manifest error]', e)
+      splashSend({ phase: 'offline-blocked', message: splashLang === 'nl' ? 'Geen internetverbinding' : 'No internet connection' })
+      if (!opts.allowBlock) return
+      openMainAndCloseSplash()
     }
   }
 
   function openMainAndCloseSplash() {
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.close()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      // already open
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close()
+        splashWindow = null
+      }
+      return
     }
-    splashWindow = null
 
     mainWindow = createWindow()
     registerIpc(() => mainWindow)
     initUpdateManager(() => mainWindow)
+
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.close()
+    }
+    splashWindow = null
+  }
+
+  function promiseWithTimeout<T>(p: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs)
+      p.then(
+        (v) => {
+          clearTimeout(t)
+          resolve(v)
+        },
+        (e) => {
+          clearTimeout(t)
+          reject(e)
+        }
+      )
+    })
   }
 
   async function resolveSplashLang(): Promise<'en' | 'nl'> {

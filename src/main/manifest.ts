@@ -69,7 +69,15 @@ export async function fetchManifest(
 
     const json = (await res.body.json()) as RemoteManifest
     if (!json || typeof json.schemaVersion !== 'number' || !Array.isArray(json.addons)) {
-      throw new Error('Manifest parse failed: invalid schema')
+      console.error('[manifest] invalid schema; continuing with empty manifest')
+      const empty: RemoteManifest = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        categories: [],
+        addons: [],
+      }
+      memCache = { url: manifestUrl, at: Date.now(), manifest: empty }
+      return { manifest: empty, mode: 'online' }
     }
 
     memCache = { url: manifestUrl, at: Date.now(), manifest: json }
