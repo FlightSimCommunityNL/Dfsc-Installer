@@ -69,10 +69,15 @@ async function buildCandidateRoots(extractDir: string): Promise<string[]> {
   const roots: string[] = []
   roots.push(extractDir)
 
+  let wrapperRoot: string | null = null
+
   // If exactly one dir exists, treat as wrapper root.
   try {
     const topDirs = await listTopLevelDirs(extractDir)
-    if (topDirs.length === 1) roots.push(join(extractDir, topDirs[0]!))
+    if (topDirs.length === 1) {
+      wrapperRoot = join(extractDir, topDirs[0]!)
+      roots.push(wrapperRoot)
+    }
   } catch {
     // ignore
   }
@@ -83,6 +88,16 @@ async function buildCandidateRoots(extractDir: string): Promise<string[]> {
     if (topDirs.includes('Community')) roots.push(join(extractDir, 'Community'))
   } catch {
     // ignore
+  }
+
+  // If wrapperRoot exists and contains Community, also try wrapperRoot/Community.
+  if (wrapperRoot) {
+    try {
+      const topDirs = await listTopLevelDirs(wrapperRoot)
+      if (topDirs.includes('Community')) roots.push(join(wrapperRoot, 'Community'))
+    } catch {
+      // ignore
+    }
   }
 
   // De-dupe, preserve order.
@@ -106,10 +121,20 @@ async function isValidPackageFolder(folderPath: string): Promise<{ ok: boolean; 
 async function scanForPackages(opts: {
   root: string
   maxDepth: number
-}): Promise<Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }>> {
+  maxDirsVisited: number
+}): Promise<{
+  packages: Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }>
+  dirsVisited: number
+  capped: boolean
+}> {
   const out: Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }> = []
+  let dirsVisited = 0
+  let capped = false
+
+  const SKIP_NAMES = new Set(['node_modules', '__macosx', '.git', '.svn', '.hg'])
 
   async function walk(current: string, depth: number) {
+    if (capped) return
     if (depth > opts.maxDepth) return
 
     let entries: any[] = []
@@ -120,8 +145,19 @@ async function scanForPackages(opts: {
     }
 
     for (const ent of entries) {
+      if (capped) return
       if (!ent.isDirectory || !ent.isDirectory()) continue
+
       const name = String(ent.name ?? '')
+      const lower = name.toLowerCase()
+      if (name.startsWith('.') || SKIP_NAMES.has(lower)) continue
+
+      dirsVisited++
+      if (dirsVisited > opts.maxDirsVisited) {
+        capped = true
+        return
+      }
+
       const p = join(current, name)
 
       const v = await isValidPackageFolder(p)
@@ -135,7 +171,52 @@ async function scanForPackages(opts: {
   }
 
   await walk(opts.root, 0)
-  return out
+  return { packages: out, dirsVisited, capped }
+}
+
+async function printTree(opts: {
+  root: string
+  log: LogSink
+  maxDepth: number
+  maxEntriesPerDir: number
+}): Promise<void> {
+  const { root, log, maxDepth, maxEntriesPerDir } = opts
+
+  async function walk(current: string, depth: number, prefix: string) {
+    if (depth > maxDepth) return
+
+    let entries: any[] = []
+    try {
+      entries = await readdir(current, { withFileTypes: true })
+    } catch {
+      return
+    }
+
+    const dirs = entries.filter((e) => e.isDirectory())
+    const files = entries.filter((e) => e.isFile())
+
+    const label = depth === 0 ? '/' : current.split(/[\\/]/).filter(Boolean).slice(-1)[0] + '/'
+    log(`${prefix}${label} (dirs: ${dirs.length} files: ${files.length})`)
+
+    const shown = entries.slice(0, maxEntriesPerDir)
+    for (const ent of shown) {
+      const name = String(ent.name ?? '')
+      if (ent.isFile && ent.isFile()) {
+        log(`${prefix}  ${name}`)
+      }
+    }
+    if (entries.length > maxEntriesPerDir) {
+      log(`${prefix}  … (${entries.length - maxEntriesPerDir} more entries)`)
+    }
+
+    for (const ent of dirs.slice(0, maxEntriesPerDir)) {
+      const name = String(ent.name ?? '')
+      await walk(join(current, name), depth + 1, prefix + '  ')
+    }
+  }
+
+  log('[installer] extracted tree:')
+  await walk(root, 0, '')
 }
 
 async function findExpectedPackages(opts: {
@@ -192,17 +273,16 @@ async function findExpectedPackages(opts: {
 
   // Fallback: auto-detect MSFS packages (bounded recursive scan).
   const top = await listTopLevelEntries(extractDir).catch(() => [])
-  log(`[installer] expected folder(s) missing; attempting auto-detection (maxDepth=3)`)
+  log(`[installer] expected folder(s) missing; attempting auto-detection (maxDepth=6)`)
   log(`[installer] extractedRoot entries: ${top.join(', ') || '(unavailable)'}`)
 
   const detectedAll: Array<{ folderName: string; folderPath: string; hasManifest: boolean; hasLayout: boolean }> = []
   for (const root of candidateRoots) {
-    const hits = await scanForPackages({ root, maxDepth: 3 })
-    if (hits.length) {
-      log(`[installer] auto-detect root=${root} hits=${hits.length}`)
-      for (const h of hits) {
-        log(`  - ${h.folderName} @ ${h.folderPath} (manifest=${h.hasManifest ? 'yes' : 'no'} layout=${h.hasLayout ? 'yes' : 'no'})`)
-      }
+    const res = await scanForPackages({ root, maxDepth: 6, maxDirsVisited: 3_000 })
+    const hits = res.packages
+    log(`[installer] auto-detect root=${root} hits=${hits.length} dirsVisited=${res.dirsVisited}${res.capped ? ' (capped)' : ''}`)
+    for (const h of hits) {
+      log(`  - ${h.folderName} @ ${h.folderPath} (manifest=${h.hasManifest ? 'yes' : 'no'} layout=${h.hasLayout ? 'yes' : 'no'})`)
     }
     detectedAll.push(...hits)
   }
@@ -222,12 +302,16 @@ async function findExpectedPackages(opts: {
     return { detectedRoot: extractDir, packages: [{ folderName: only.folderName, srcPath: only.folderPath }] }
   }
 
+  // High-signal tree preview for debugging.
+  await printTree({ root: extractDir, log, maxDepth: 3, maxEntriesPerDir: 50 })
+
   const detectedNames = detected.map((d) => d.folderName)
   const expected = packageFolderNames.join(', ')
   const detectedList = detected.map((d) => `${d.folderName} (${d.folderPath})`).join(', ')
 
   throw new Error(
-    `Expected folder(s) not found: [${expected}]. Detected packages: [${detectedNames.join(', ') || 'none'}]. ` +
+    `Expected folder(s) not found: [${expected}]. Candidate roots: [${candidateRoots.join(', ')}]. ` +
+      `Detected packages: [${detectedNames.join(', ') || 'none'}]. ` +
       `Set manifest.packageFolderNames to one of: ${detectedList || '(none found)'} or fix the ZIP structure.`
   )
 }
