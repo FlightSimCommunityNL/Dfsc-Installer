@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { RefreshCw, FolderSearch, FolderOpen, Download } from 'lucide-react'
 
 function SectionCard(props: { title: string; children: React.ReactNode }) {
@@ -64,6 +64,14 @@ export function SettingsModal(props: {
 }) {
   if (!props.open) return null
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') props.onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [props])
+
   const isUpdateBusy = props.updateState.status === 'checking' || props.updateState.status === 'progress'
   const updateButtonLabel =
     props.updateState.status === 'checking'
@@ -75,14 +83,27 @@ export function SettingsModal(props: {
           : props.t('settings.updates.check')
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={props.onClose} />
+    <div className="fixed inset-0 z-50 dsfc-no-drag" style={{ WebkitAppRegion: 'no-drag' as any }}>
+      <div
+        className="absolute inset-0 bg-black/60 z-0"
+        onMouseDown={props.onClose}
+        role="button"
+        aria-label="Close"
+      />
 
-      <div className="absolute left-1/2 top-1/2 w-[820px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-24px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-bg-900 overflow-hidden flex flex-col">
+      <div
+        className="absolute z-10 left-1/2 top-1/2 w-[820px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-24px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-bg-900 overflow-hidden flex flex-col"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         {/* Header (fixed) */}
         <div className="flex-shrink-0 px-4 py-3 border-b border-border flex items-center justify-between">
           <div className="text-sm font-semibold">{props.t('settings.title')}</div>
-          <button onClick={props.onClose} className="text-text-400 hover:text-text-100">
+          <button
+            onClick={props.onClose}
+            className="dsfc-no-drag text-text-400 hover:text-text-100"
+            style={{ WebkitAppRegion: 'no-drag' as any }}
+            type="button"
+          >
             {props.t('common.close')}
           </button>
         </div>
@@ -96,11 +117,11 @@ export function SettingsModal(props: {
                 <div className="flex flex-col gap-2">
                   <ReadonlyPath value={props.communityPath} fallback={props.t('common.notSet')} />
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={props.onAutoDetectCommunity} className={buttonBase}>
+                    <button onClick={props.onAutoDetectCommunity} className={`dsfc-no-drag ${buttonBase}`} style={{ WebkitAppRegion: 'no-drag' as any }} type="button">
                       <FolderSearch size={15} className="text-text-300" />
                       {props.t('settings.autoDetect')}
                     </button>
-                    <button onClick={props.onBrowseCommunity} className={buttonBase}>
+                    <button onClick={props.onBrowseCommunity} className={`dsfc-no-drag ${buttonBase}`} style={{ WebkitAppRegion: 'no-drag' as any }} type="button">
                       <FolderOpen size={15} className="text-text-300" />
                       {props.t('settings.browse')}
                     </button>
@@ -119,14 +140,16 @@ export function SettingsModal(props: {
                   <ReadonlyPath value={props.installPath} fallback={props.t('common.notSet')} />
 
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={props.onBrowseInstallPath} className={buttonBase}>
+                    <button onClick={props.onBrowseInstallPath} className={`dsfc-no-drag ${buttonBase}`} style={{ WebkitAppRegion: 'no-drag' as any }} type="button">
                       <FolderOpen size={15} className="text-text-300" />
                       {props.t('settings.browse')}
                     </button>
                     <button
                       onClick={props.onUseCommunityForInstallPath}
                       disabled={!props.communityPath}
-                      className={buttonBase + (!props.communityPath ? ' opacity-50 cursor-not-allowed' : '')}
+                      className={`dsfc-no-drag ${buttonBase}` + (!props.communityPath ? ' opacity-50 cursor-not-allowed' : '')}
+                      style={{ WebkitAppRegion: 'no-drag' as any }}
+                      type="button"
                     >
                       {props.t('settings.useCommunityFolder')}
                     </button>
@@ -168,11 +191,13 @@ export function SettingsModal(props: {
                       void props.onCheckUpdates()
                     }}
                     className={
-                      `w-full h-9 px-4 rounded-xl text-sm font-semibold transition inline-flex items-center justify-center gap-2 ` +
+                      `dsfc-no-drag w-full h-9 px-4 rounded-xl text-sm font-semibold transition inline-flex items-center justify-center gap-2 ` +
                       (isUpdateBusy
                         ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
                         : 'bg-accent text-black hover:brightness-110')
                     }
+                    style={{ WebkitAppRegion: 'no-drag' as any }}
+                    type="button"
                   >
                     {props.updateState.status === 'available' || props.updateState.status === 'downloaded' ? (
                       <Download size={15} />
@@ -232,13 +257,17 @@ export function SettingsModal(props: {
         <div className="flex-shrink-0 px-4 py-3 border-t border-border flex gap-2 justify-end bg-bg-900">
           <button
             onClick={props.onClose}
-            className="h-9 px-4 rounded-xl border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30"
+            className="dsfc-no-drag h-9 px-4 rounded-xl border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30"
+            style={{ WebkitAppRegion: 'no-drag' as any }}
+            type="button"
           >
             {props.t('common.cancel')}
           </button>
           <button
             onClick={props.onSave}
-            className="h-9 px-4 rounded-xl bg-accent text-black text-sm font-semibold hover:brightness-110"
+            className="dsfc-no-drag h-9 px-4 rounded-xl bg-accent text-black text-sm font-semibold hover:brightness-110"
+            style={{ WebkitAppRegion: 'no-drag' as any }}
+            type="button"
           >
             {props.t('common.save')}
           </button>

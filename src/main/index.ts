@@ -13,8 +13,28 @@ import { getAddonManifestUrl } from './config'
 import { fetchManifest } from './manifest'
 import type { AppSettings } from '@shared/types'
 
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err)
+})
+
 let mainWindow: BrowserWindow | null = null
+let mainWindowOpening = false
 let splashWindow: BrowserWindow | null = null
+
+function closeSplashSafe() {
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.close()
+    }
+  } catch {
+    // ignore
+  } finally {
+    splashWindow = null
+  }
+}
 
 app.on('before-quit', () => {
   try {
@@ -88,9 +108,17 @@ function splashSend(payload: any) {
 }
 
 app.whenReady().then(async () => {
-  const STARTUP_TIMEOUT_MS = 15_000
-  const INSTALL_WATCHDOG_MS = 120_000
-  let installingUpdate = false
+  try {
+    const STARTUP_TIMEOUT_MS = 15_000
+    const SPLASH_HANG_GUARD_MS = 15_000
+    const INSTALL_WATCHDOG_MS = 120_000
+    let installingUpdate = false
+
+    console.log('[startup] registering IPC')
+    // Register IPC exactly once for the lifetime of the app.
+    // Uses a getter so handlers can still send events when mainWindow is created later.
+    registerIpc(() => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null))
+    console.log('[startup] IPC registered')
 
   // Windows: remove default application menu bar (File/Edit/View/...).
   if (process.platform === 'win32') {
@@ -114,6 +142,7 @@ app.whenReady().then(async () => {
   const splashLang = await resolveSplashLang()
 
   const rendererUrl = process.env.ELECTRON_RENDERER_URL
+  console.log('[startup] creating splash')
   splashWindow = createSplashWindow({
     iconPath: path.join(process.cwd(), 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     loadUrl: rendererUrl,
@@ -121,15 +150,74 @@ app.whenReady().then(async () => {
   })
   console.log('[startup] splash shown')
 
-  // In dev: show splash briefly, then open the app regardless of networking.
-  if (!app.isPackaged) {
-    setTimeout(() => {
+  const openMainWindow = () => {
+    if ((mainWindow && !mainWindow.isDestroyed()) || mainWindowOpening) return
+    mainWindowOpening = true
+
+    console.log('[startup] creating main')
+
+    mainWindow = createWindow({ autoShow: false })
+    initUpdateManager(() => mainWindow)
+
+    setUpdateHandoffHandlers({
+      hideMain: () => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
+        } catch {
+          // ignore
+        }
+      },
+      showSplash: () => {
+        try {
+          if (!splashWindow || splashWindow.isDestroyed()) {
+            splashWindow = createSplashWindow({
+              iconPath: path.join(process.cwd(), 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+              loadUrl: rendererUrl,
+              lang: splashLang,
+            })
+            console.log('[startup] splash shown')
+          } else {
+            splashWindow.show()
+          }
+        } catch {
+          // ignore
+        }
+      },
+      sendSplash: (payload: any) => splashSend(payload),
+    })
+
+    void startBackgroundUpdatePolling()
+
+    mainWindow.once('ready-to-show', () => {
+      console.log('[startup] main ready-to-show')
+      mainWindowOpening = false
       try {
-        openMainAndCloseSplash({ manifestOk: true, reason: 'dev' })
+        mainWindow?.show()
       } catch {
         // ignore
       }
-    }, 600)
+      closeSplashSafe()
+      console.log('[startup] splash closed')
+    })
+  }
+
+  // Hard guard: splash must never hang indefinitely.
+  setTimeout(() => {
+    if (installingUpdate) return
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      console.warn('[startup] splash timeout fallback triggered')
+      openMainWindow()
+    }
+  }, SPLASH_HANG_GUARD_MS)
+
+  // Dev mode: skip update gate and start immediately.
+  if (!app.isPackaged) {
+    splashSend({
+      phase: 'starting',
+      message: splashLang === 'nl' ? 'Dev mode — starten…' : 'Dev mode — starting…',
+    })
+    openMainWindow()
+    return
   }
 
   // Splash IPC actions
@@ -151,7 +239,7 @@ app.whenReady().then(async () => {
     console.warn('[startup] timeout fallback triggered')
     if (installingUpdate) return
     try {
-      openMainAndCloseSplash({ manifestOk: false, reason: 'timeout' })
+      openMainWindow()
     } catch (e: any) {
       console.error('[startup] timeout openMain failed', e)
     }
@@ -194,12 +282,10 @@ app.whenReady().then(async () => {
     if (!installingUpdate) {
       console.log('[startup] opening main window')
       try {
-        const manifestOk = startupError == null
-        openMainAndCloseSplash({ manifestOk, reason: manifestOk ? 'ok' : 'manifest-failed' })
+        openMainWindow()
       } catch (e: any) {
         console.error('[startup] openMain failed', e)
       }
-      console.log('[startup] main window created')
     }
   }
 
@@ -326,7 +412,7 @@ app.whenReady().then(async () => {
                   ? 'Update installeren duurt te lang. Starten…'
                   : 'Update install is taking too long. Starting…',
             })
-            openMainAndCloseSplash({ manifestOk: false, reason: 'update-watchdog' })
+            openMainWindow()
           } catch {
             // ignore
           }
@@ -395,103 +481,13 @@ app.whenReady().then(async () => {
       await promiseWithTimeout(fetchManifest(getAddonManifestUrl(), 0, 5_000), 5_500, 'manifest fetch')
       console.log('[startup] manifest done')
       if (!opts.allowBlock) return
-      openMainAndCloseSplash()
+      openMainWindow()
     } catch (e: any) {
       console.error('[manifest error]', e)
       splashSend({ phase: 'offline-blocked', message: splashLang === 'nl' ? 'Geen internetverbinding' : 'No internet connection' })
       if (!opts.allowBlock) return
-      openMainAndCloseSplash()
+      openMainWindow()
     }
-  }
-
-  function openMainAndCloseSplash(opts: { manifestOk: boolean; reason: string }) {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      // already open
-      try {
-        mainWindow.show()
-      } catch {
-        // ignore
-      }
-      if (splashWindow && !splashWindow.isDestroyed()) {
-        splashWindow.close()
-        splashWindow = null
-      }
-      return
-    }
-
-    // Keep splash visible until:
-    // - main window is ready
-    // - manifest gate passed (or we hit a timeout and fail-open)
-    mainWindow = createWindow({ autoShow: false })
-    registerIpc(() => mainWindow)
-    initUpdateManager(() => mainWindow)
-
-    setUpdateHandoffHandlers({
-      hideMain: () => {
-        try {
-          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
-        } catch {
-          // ignore
-        }
-      },
-      showSplash: () => {
-        try {
-          if (!splashWindow || splashWindow.isDestroyed()) {
-            splashWindow = createSplashWindow({
-              iconPath: path.join(process.cwd(), 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-              loadUrl: rendererUrl,
-              lang: splashLang,
-            })
-          } else {
-            splashWindow.show()
-          }
-        } catch {
-          // ignore
-        }
-      },
-      sendSplash: (payload: any) => splashSend(payload),
-    })
-
-    void startBackgroundUpdatePolling()
-
-    let shown = false
-    const failOpenTimer = setTimeout(() => {
-      if (shown) return
-      shown = true
-      try {
-        mainWindow?.show()
-      } catch {
-        // ignore
-      }
-      try {
-        if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
-      } catch {
-        // ignore
-      }
-      splashWindow = null
-    }, 12_000)
-
-    mainWindow.once('ready-to-show', () => {
-      // If manifestOk, we can swap splash -> main cleanly.
-      // If not, we still show after a short delay (or failOpenTimer fires).
-      const delay = opts.manifestOk ? 0 : 1200
-      setTimeout(() => {
-        if (shown) return
-        shown = true
-        clearTimeout(failOpenTimer)
-        try {
-          mainWindow?.show()
-        } catch {
-          // ignore
-        }
-        try {
-          if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
-        } catch {
-          // ignore
-        }
-        splashWindow = null
-      }, delay)
-    })
   }
 
   function promiseWithTimeout<T>(p: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -523,6 +519,19 @@ app.whenReady().then(async () => {
     const locale = app.getLocale()
     return locale?.toLowerCase().startsWith('nl') ? 'nl' : 'en'
   }
+  } catch (err) {
+    console.error('[startup] fatal error', err)
+    try {
+      // Fail-open: attempt to show main window even if startup gating failed.
+      if (!mainWindow && !mainWindowOpening) {
+        mainWindowOpening = true
+        mainWindow = createWindow({ autoShow: true })
+      }
+      closeSplashSafe()
+    } catch {
+      // ignore
+    }
+  }
 })
 
 app.on('activate', () => {
@@ -530,8 +539,14 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length !== 0) return
   if (splashWindow && !splashWindow.isDestroyed()) return
 
+  if (mainWindow || mainWindowOpening) return
+  mainWindowOpening = true
+
   mainWindow = createWindow({ autoShow: true })
-  registerIpc(() => mainWindow)
+  mainWindow.once('ready-to-show', () => {
+    mainWindowOpening = false
+  })
+
   initUpdateManager(() => mainWindow)
   void startBackgroundUpdatePolling()
 })

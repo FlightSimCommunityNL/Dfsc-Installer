@@ -23,15 +23,30 @@ import { getAddonManifestUrl } from './config'
 import { AddonInstallerService } from './installer'
 import { checkForUpdates, downloadUpdate, quitAndInstall } from './updater'
 
+let ipcRegistered = false
+
 let lastManifestUrl: string | null = null
-let lastManifest: Awaited<ReturnType<typeof fetchManifest>> | null = null
+let lastManifest: import('@shared/types').RemoteManifest | null = null
 
 
 function sendProgress(getWin: () => BrowserWindow | null, evt: any) {
   getWin()?.webContents.send(IPC.EVT_INSTALL_PROGRESS, evt)
 }
 
+function safeHandle<T extends (...args: any[]) => any>(channel: string, handler: T) {
+  try {
+    ipcMain.removeHandler(channel)
+  } catch {
+    // ignore
+  }
+  ipcMain.handle(channel, handler as any)
+}
+
 export function registerIpc(getWin: () => BrowserWindow | null) {
+  // Keep a guard (fast path) but also make registration deterministic via removeHandler.
+  if (ipcRegistered) return
+  ipcRegistered = true
+
   const installer = new AddonInstallerService(
     (line) => {
       // Logs UI removed; keep logs in main process for debugging.
@@ -40,16 +55,16 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     (evt) => sendProgress(getWin, evt)
   )
 
-  ipcMain.handle(IPC.SETTINGS_GET, async () => {
+  safeHandle(IPC.SETTINGS_GET, async () => {
     return getState()
   })
 
-  ipcMain.handle(IPC.SETTINGS_SET, async (_evt, patch) => {
+  safeHandle(IPC.SETTINGS_SET, async (_evt, patch) => {
     const next = setSettings(patch)
     return next
   })
 
-  ipcMain.handle(IPC.COMMUNITY_BROWSE, async () => {
+  safeHandle(IPC.COMMUNITY_BROWSE, async () => {
     const win = getWin()
     if (!win) return null
     const picked = await browseForCommunityPath(win)
@@ -59,7 +74,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return picked
   })
 
-  ipcMain.handle(IPC.COMMUNITY_DETECT, async () => {
+  safeHandle(IPC.COMMUNITY_DETECT, async () => {
     const s = store.get('settings')
     const detected = await detectCommunityPathWindows({
       msStorePackageFamilyName: s.windowsMsStorePackageFamilyName,
@@ -69,7 +84,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return detected
   })
 
-  ipcMain.handle(IPC.COMMUNITY_TEST, async () => {
+  safeHandle(IPC.COMMUNITY_TEST, async () => {
     const p = store.get('settings').communityPath
     if (!p) throw new Error('Community folder not set')
     if (!(await fse.pathExists(p))) throw new Error('Path does not exist')
@@ -77,7 +92,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return true
   })
 
-  ipcMain.handle(IPC.INSTALL_PATH_BROWSE, async () => {
+  safeHandle(IPC.INSTALL_PATH_BROWSE, async () => {
     const win = getWin()
     if (!win) return null
     const picked = await browseForInstallPath(win)
@@ -87,7 +102,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return picked
   })
 
-  ipcMain.handle(IPC.INSTALL_PATH_TEST, async () => {
+  safeHandle(IPC.INSTALL_PATH_TEST, async () => {
     const s = store.get('settings')
     const p = (s.installPath ?? s.communityPath) as string | null
     if (!p) throw new Error('Install path not set')
@@ -96,7 +111,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return true
   })
 
-  ipcMain.handle(IPC.MANIFEST_FETCH, async (_evt, args: IpcManifestFetchArgs) => {
+  safeHandle(IPC.MANIFEST_FETCH, async (_evt, args: IpcManifestFetchArgs) => {
     const url = args?.url ?? getAddonManifestUrl()
     lastManifestUrl = url
     const res = await fetchManifest(url)
@@ -104,19 +119,22 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return res
   })
 
-  ipcMain.handle(IPC.RELEASE_NOTES_FETCH, async (_evt, args: IpcReleaseNotesFetchArgs): Promise<IpcReleaseNotesFetchResult> => {
-    const url = String(args?.url ?? '')
-    if (!/^https?:\/\//i.test(url)) throw new Error('Invalid URL')
+  safeHandle(
+    IPC.RELEASE_NOTES_FETCH,
+    async (_evt, args: IpcReleaseNotesFetchArgs): Promise<IpcReleaseNotesFetchResult> => {
+      const url = String(args?.url ?? '')
+      if (!/^https?:\/\//i.test(url)) throw new Error('Invalid URL')
 
-    const res = await request(url, { method: 'GET' })
-    const contentType = String(res.headers['content-type'] ?? '')
-    const body = await res.body.text()
+      const res = await request(url, { method: 'GET' })
+      const contentType = String(res.headers['content-type'] ?? '')
+      const body = await res.body.text()
 
-    // Always return status + body. Renderer handles 404 as "no release notes".
-    return { statusCode: res.statusCode, contentType, body }
-  })
+      // Always return status + body. Renderer handles 404 as "no release notes".
+      return { statusCode: res.statusCode, contentType, body }
+    }
+  )
 
-  ipcMain.handle(IPC.ADDON_RECONCILE, async () => {
+  safeHandle(IPC.ADDON_RECONCILE, async () => {
     const state = getState()
     const basePath = state.settings.installPath ?? state.settings.communityPath
 
@@ -143,8 +161,14 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     }
 
     // Fetch manifest so we can map folders -> addon IDs.
-    const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl()))
+    const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl())).manifest
     lastManifest = manifest
+
+    const addons = Array.isArray(manifest?.addons) ? manifest.addons : []
+    if (!addons.length) {
+      console.warn('[reconcile] manifest.addons is empty or invalid; continuing with no-op reconcile')
+      return getState()
+    }
 
     // Scan install path folder: top-level directories.
     let communityDirs: string[] = []
@@ -181,7 +205,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     const folderToAddon = new Map<string, string>()
     const conflicts = new Set<string>()
 
-    for (const addon of manifest.addons) {
+    for (const addon of addons) {
       const folders = addon.packageFolderNames ?? []
       for (const folder of folders) {
         const key = folder.toLowerCase()
@@ -242,7 +266,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
           }
         }
 
-        const addon = manifest.addons.find((a) => a.id === addonId)
+        const addon = addons.find((a: any) => a.id === addonId)
         const installedVersion = rec.installedVersion === 'unknown' && inferred ? inferred : rec.installedVersion
 
         setInstalled(addonId, {
@@ -275,7 +299,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
         }
       }
 
-      const addon = manifest.addons.find((a) => a.id === addonId)
+      const addon = addons.find((a: any) => a.id === addonId)
       const installedVersion = inferred ?? 'unknown'
 
       setInstalled(addonId, {
@@ -296,7 +320,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return getState()
   })
 
-  ipcMain.handle(IPC.ADDON_INSTALL, async (_evt, args: IpcAddonInstallArgs) => {
+  safeHandle(IPC.ADDON_INSTALL, async (_evt, args: IpcAddonInstallArgs) => {
     try {
       const state = getState()
       const installPath = state.settings.installPath ?? state.settings.communityPath
@@ -310,8 +334,11 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
         }
       }
 
-      const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl()))
-      const addon = manifest.addons.find((a) => a.id === args.addonId)
+      const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl())).manifest
+      lastManifest = manifest
+
+      const addons = Array.isArray(manifest?.addons) ? manifest.addons : []
+      const addon = addons.find((a: any) => a.id === args.addonId)
       if (!addon) throw new Error(`Addon not found in manifest: ${args.addonId}`)
 
       const channel = addon.channels[args.channel] as ManifestAddonChannel | undefined
@@ -336,7 +363,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     }
   })
 
-  ipcMain.handle(IPC.ADDON_UNINSTALL, async (_evt, args: IpcAddonUninstallArgs) => {
+  safeHandle(IPC.ADDON_UNINSTALL, async (_evt, args: IpcAddonUninstallArgs) => {
     try {
       const state = getState()
       const rec = state.installed[args.addonId]
@@ -351,7 +378,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     }
   })
 
-  ipcMain.handle(IPC.UPDATE_CHECK, async () => {
+  safeHandle(IPC.UPDATE_CHECK, async () => {
     const { app } = await import('electron')
     if (!app.isPackaged) {
       // don't throw; renderer shows friendly message via UPDATE_ERROR event
@@ -360,30 +387,30 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return checkForUpdates()
   })
 
-  ipcMain.handle(IPC.UPDATE_DOWNLOAD, async () => {
+  safeHandle(IPC.UPDATE_DOWNLOAD, async () => {
     const { app } = await import('electron')
     if (!app.isPackaged) return { skipped: true, reason: 'not-packaged' }
     return downloadUpdate()
   })
 
-  ipcMain.handle(IPC.UPDATE_QUIT_INSTALL, async () => {
+  safeHandle(IPC.UPDATE_QUIT_INSTALL, async () => {
     const { app } = await import('electron')
     if (!app.isPackaged) return { skipped: true, reason: 'not-packaged' }
     return quitAndInstall()
   })
 
   // Live/background update indicator IPC aliases
-  ipcMain.handle(IPC.IPC_UPDATE_DOWNLOAD, async () => {
+  safeHandle(IPC.IPC_UPDATE_DOWNLOAD, async () => {
     return downloadUpdate()
   })
 
-  ipcMain.handle(IPC.IPC_UPDATE_INSTALL, async () => {
+  safeHandle(IPC.IPC_UPDATE_INSTALL, async () => {
     // Routed via updater controller handoff (shows splash, hides main).
     const { installUpdateViaSplashHandoff } = await import('./updater')
     return installUpdateViaSplashHandoff()
   })
 
-  ipcMain.handle(IPC.OPEN_EXTERNAL, async (_evt, args: { url: string }) => {
+  safeHandle(IPC.OPEN_EXTERNAL, async (_evt, args: { url: string }) => {
     // Only allow http(s) links.
     const url = String(args?.url ?? '')
     if (!/^https?:\/\//i.test(url)) throw new Error('Invalid URL')
@@ -391,7 +418,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return true
   })
 
-  ipcMain.handle(IPC.SYSTEM_LOCALE_GET, async () => {
+  safeHandle(IPC.SYSTEM_LOCALE_GET, async () => {
     // Prefer Electron locale from main.
     try {
       const { app } = await import('electron')
@@ -401,18 +428,15 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     }
   })
 
-  ipcMain.handle(
-    IPC.SYSTEM_DISKSPACE_GET,
-    async (_evt, args: IpcSystemDiskSpaceArgs): Promise<IpcSystemDiskSpaceResult> => {
-      return getDiskSpaceForPath(args?.targetPath)
-    }
-  )
+  safeHandle(IPC.SYSTEM_DISKSPACE_GET, async (_evt, args: IpcSystemDiskSpaceArgs): Promise<IpcSystemDiskSpaceResult> => {
+    return getDiskSpaceForPath(args?.targetPath)
+  })
 
   const getAppVersion = async () => {
     const { app } = await import('electron')
     return { version: app.getVersion(), isPackaged: app.isPackaged }
   }
 
-  ipcMain.handle(IPC.SYSTEM_GET_APP_VERSION, getAppVersion)
-  ipcMain.handle(IPC.SYSTEM_APP_VERSION_GET, getAppVersion)
+  safeHandle(IPC.SYSTEM_GET_APP_VERSION, getAppVersion)
+  safeHandle(IPC.SYSTEM_APP_VERSION_GET, getAppVersion)
 }

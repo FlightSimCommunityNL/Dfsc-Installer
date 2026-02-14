@@ -10,6 +10,23 @@ let memCache: { url: string; at: number; manifest: RemoteManifest } | null = nul
 
 export type FetchManifestResult = { manifest: RemoteManifest; mode: 'online' | 'offline' }
 
+function emptyManifest(): RemoteManifest {
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    categories: [],
+    addons: [],
+  }
+}
+
+function validateManifestShape(m: any): { ok: true } | { ok: false; reason: string } {
+  if (!m || typeof m !== 'object') return { ok: false, reason: 'manifest is not an object' }
+  if (typeof m.schemaVersion !== 'number') return { ok: false, reason: 'schemaVersion is not a number' }
+  if (!Array.isArray(m.categories)) return { ok: false, reason: 'categories is not an array' }
+  if (!Array.isArray(m.addons)) return { ok: false, reason: 'addons is not an array' }
+  return { ok: true }
+}
+
 function getCachePath(): string {
   return join(app.getPath('userData'), 'cache', 'manifest.json')
 }
@@ -67,15 +84,13 @@ export async function fetchManifest(
       throw new Error(`Manifest fetch failed: expected application/json but got ${contentType || '(missing content-type)'}`)
     }
 
-    const json = (await res.body.json()) as RemoteManifest
-    if (!json || typeof json.schemaVersion !== 'number' || !Array.isArray(json.addons)) {
-      console.error('[manifest] invalid schema; continuing with empty manifest')
-      const empty: RemoteManifest = {
-        schemaVersion: 1,
-        generatedAt: new Date().toISOString(),
-        categories: [],
-        addons: [],
-      }
+    const json = (await res.body.json()) as any
+    const v = validateManifestShape(json)
+    if (!v.ok) {
+      const keys = json && typeof json === 'object' ? Object.keys(json).slice(0, 20).join(', ') : String(json)
+      console.error(`[manifest] invalid schema (${v.reason}); keys=${keys}`)
+
+      const empty = emptyManifest()
       memCache = { url: manifestUrl, at: Date.now(), manifest: empty }
       return { manifest: empty, mode: 'online' }
     }
@@ -100,13 +115,20 @@ export async function fetchManifest(
     const p = getCachePath()
     if (await fse.pathExists(p)) {
       const cached = await fse.readJson(p)
-      const json = cached?.manifest as RemoteManifest
-      if (json && typeof json.schemaVersion === 'number' && Array.isArray(json.addons)) {
+      const json = cached?.manifest as any
+      const v = validateManifestShape(json)
+      if (v.ok) {
         memCache = { url: manifestUrl, at: Date.now(), manifest: json }
         return { manifest: json, mode: 'offline' }
       }
+
+      console.warn(`[manifest] cached manifest invalid (${v.reason}); falling back to empty`) 
     }
 
-    throw err
+    // No cache available; fail-open with a safe empty manifest so reconcile/render never crash.
+    const empty = emptyManifest()
+    memCache = { url: manifestUrl, at: Date.now(), manifest: empty }
+    console.warn(`[manifest] fetch failed and no valid cache; using empty manifest. error=${(err as any)?.message ?? String(err)}`)
+    return { manifest: empty, mode: 'offline' }
   }
 }
