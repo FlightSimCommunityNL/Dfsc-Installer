@@ -45,9 +45,9 @@
     "vite": "^7.3.1"
   },
   "build": {
-    "productName": "Dutch Flight Sim Community Installer",
+    "productName": "DFSC Installer",
     "icon": "build/icon.png",
-    "appId": "com.dsfc.installer",
+    "appId": "nl.flightsimcommunity.dfsc.installer",
     "copyright": "Copyright (c) 2026 Grazzy_Duck / Bas",
     "asar": true,
     "directories": {
@@ -87,8 +87,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "PLACEHOLDER_OWNER",
-        "repo": "PLACEHOLDER_REPO"
+        "owner": "FlightSimCommunityNL",
+        "repo": "Dfsc-Installer"
       }
     ]
   }

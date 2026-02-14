@@ -9,7 +9,7 @@ Windows-only Electron desktop installer/manager for Microsoft Flight Simulator 2
 - Renderer: React + TailwindCSS
 - Main: Node.js (download, SHA256 verify, extract, atomic install)
 - Settings: `electron-store`
-- Auto-update: `electron-builder` + `electron-updater` (generic provider)
+- Auto-update: `electron-builder` + `electron-updater` (GitHub Releases provider)
 
 ## Development (macOS)
 Prereqs:
@@ -64,32 +64,52 @@ An example manifest is in `resources/example-manifest.json`.
 ## App auto-updates (GitHub Releases)
 The app uses `electron-updater` with the **GitHub Releases** provider.
 
-Placeholders to change (single source):
-- `src/main/update-config.ts`
-  - `GITHUB_RELEASES_OWNER`
-  - `GITHUB_RELEASES_REPO`
+Source of truth repo:
+- `FlightSimCommunityNL/Dfsc-Installer`
 
-Build-time publish config also includes placeholders:
-- `package.json` → `build.publish` → `owner` / `repo`
+Runtime config:
+- `src/main/update-config.ts` (`GITHUB_RELEASES_OWNER`, `GITHUB_RELEASES_REPO`)
 
-### Steps to enable publishing later
-1) Create a GitHub repository.
-2) Update placeholders:
-   - `src/main/update-config.ts`
-   - `package.json` (`build.publish.owner` / `build.publish.repo`)
-3) Create a GitHub token for CI publishing:
-   - Set `GH_TOKEN` as a GitHub Actions secret.
-4) Add a GitHub Actions workflow that:
-   - runs on tag
-   - builds Windows NSIS
-   - uploads artifacts to GitHub Releases (electron-builder does this automatically when `GH_TOKEN` is present).
+Build-time publish config:
+- `package.json` → `build.publish` (`provider=github`, `owner`, `repo`)
+
+### GitHub Actions publishing (required)
+This repo includes `.github/workflows/release.yml` which:
+- triggers on tags like `v0.1.0`
+- builds Windows NSIS
+- publishes a GitHub Release via `electron-builder`
+
+You must add a repo secret:
+- `GH_TOKEN` → a GitHub token that can create releases and upload assets
+
+### How to cut a release
+1) Bump `package.json` version (e.g. `0.1.0` → `0.1.1`).
+2) Commit and push.
+3) Tag and push the tag:
+   - `git tag v0.1.1`
+   - `git push origin v0.1.1`
+4) Wait for GitHub Actions workflow **Release** to finish.
+5) Verify the GitHub Release contains (names may vary):
+   - `*.exe` (NSIS installer)
+   - `latest.yml`
+   - `*.blockmap`
+
+### How to test the update flow (Windows)
+1) Install `v0.1.0` from GitHub Releases.
+2) Publish `v0.1.1`.
+3) Launch the installed `v0.1.0` app:
+   - it should detect an update
+   - download it
+   - restart to install
+4) Confirm the app version is now `0.1.1`.
 
 ### Local build (no publishing)
 - `npm run dist:win`
 
-Note: without a real repo + release artifacts, update checks will fail (expected) but the app will still run.
+Dev mode note:
+- `npm run dev` never blocks on updates; update checks are skipped when the app is not packaged.
 
 ## App metadata
-- productName: `Dutch Flight Sim Community Installer`
-- appId: `com.dsfc.installer`
+- productName: `DFSC Installer`
+- appId: `nl.flightsimcommunity.dfsc.installer`
 - author: `Grazzy_Duck / Bas`

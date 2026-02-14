@@ -20,13 +20,17 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
 
   autoUpdater.autoDownload = false
 
-  // Ensure provider is GitHub Releases (placeholders are in update-config.ts).
+  // Ensure provider is GitHub Releases.
   const { owner, repo } = getGitHubReleasesOwnerRepo()
   autoUpdater.setFeedURL({ provider: 'github', owner, repo })
 
-  autoUpdater.on('checking-for-update', () => winSend(IPC.UPDATE_CHECKING))
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[updates] checking-for-update')
+    winSend(IPC.UPDATE_CHECKING)
+  })
 
   autoUpdater.on('update-available', (info) => {
+    console.log('[updates] update-available', { version: info?.version })
     const payload: UpdateAvailablePayload = {
       version: info.version,
       releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined,
@@ -35,9 +39,13 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
     winSend(IPC.UPDATE_AVAILABLE, payload)
   })
 
-  autoUpdater.on('update-not-available', () => winSend(IPC.UPDATE_NOT_AVAILABLE))
+  autoUpdater.on('update-not-available', () => {
+    console.log('[updates] update-not-available')
+    winSend(IPC.UPDATE_NOT_AVAILABLE)
+  })
 
   autoUpdater.on('download-progress', (p) => {
+    console.log('[updates] download-progress', { percent: p?.percent, transferred: p?.transferred, total: p?.total })
     const payload: UpdateProgressPayload = {
       percent: p.percent,
       bytesPerSecond: p.bytesPerSecond,
@@ -48,24 +56,45 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
+    console.log('[updates] update-downloaded', { version: info?.version })
     const payload: UpdateDownloadedPayload = { version: info.version }
     winSend(IPC.UPDATE_DOWNLOADED, payload)
   })
 
   autoUpdater.on('error', (err) => {
     const payload: UpdateErrorPayload = { message: err?.message ?? String(err) }
+    console.error('[updates] error', payload.message)
     winSend(IPC.UPDATE_ERROR, payload)
   })
 }
 
 export async function checkForUpdates() {
+  // Never block dev runs on update checks.
+  const { app } = await import('electron')
+  if (!app.isPackaged) {
+    console.log('[updates] Skip checkForUpdates because application is not packed')
+    return null
+  }
+  console.log('[updates] checkForUpdates()')
   return autoUpdater.checkForUpdates()
 }
 
 export async function downloadUpdate() {
+  const { app } = await import('electron')
+  if (!app.isPackaged) {
+    console.log('[updates] Skip downloadUpdate because application is not packed')
+    return null
+  }
+  console.log('[updates] downloadUpdate()')
   return autoUpdater.downloadUpdate()
 }
 
-export function quitAndInstall() {
+export async function quitAndInstall() {
+  const { app } = await import('electron')
+  if (!app.isPackaged) {
+    console.log('[updates] Skip quitAndInstall because application is not packed')
+    return
+  }
+  console.log('[updates] quitAndInstall()')
   autoUpdater.quitAndInstall()
 }

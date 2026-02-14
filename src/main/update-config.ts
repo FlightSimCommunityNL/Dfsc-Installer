@@ -1,5 +1,5 @@
-export const GITHUB_RELEASES_OWNER = 'PLACEHOLDER_OWNER'
-export const GITHUB_RELEASES_REPO = 'PLACEHOLDER_REPO'
+export const GITHUB_RELEASES_OWNER = 'FlightSimCommunityNL'
+export const GITHUB_RELEASES_REPO = 'Dfsc-Installer'
 
 export function getGitHubReleasesOwnerRepo() {
   return {
