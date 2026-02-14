@@ -1,12 +1,21 @@
 import updater from 'electron-updater'
 import type { BrowserWindow } from 'electron'
 import { IPC } from '@shared/ipc'
-import type { UpdateAvailablePayload, UpdateDownloadedPayload, UpdateErrorPayload, UpdateProgressPayload } from '@shared/ipc'
+import type {
+  LiveUpdateAvailablePayload,
+  LiveUpdateProgressPayload,
+  LiveUpdateReadyPayload,
+  UpdateAvailablePayload,
+  UpdateDownloadedPayload,
+  UpdateErrorPayload,
+  UpdateProgressPayload,
+} from '@shared/ipc'
 import { getGitHubReleasesOwnerRepo, getGitHubReleasePageUrl } from './update-config'
 
 const { autoUpdater } = updater
 
 let currentGetWin: (() => BrowserWindow | null) | null = null
+let pollingTimer: NodeJS.Timeout | null = null
 
 function winSend(channel: string, payload?: any) {
   const win = currentGetWin?.() ?? null
@@ -30,22 +39,33 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   })
 
   autoUpdater.on('update-available', (info) => {
-    console.log('[updates] update-available', { version: info?.version })
+    console.log('[updates] update available', { version: info?.version })
+
+    // Existing "Updates" panel event
     const payload: UpdateAvailablePayload = {
       version: info.version,
       releaseNotes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined,
       releaseUrl: getGitHubReleasePageUrl(info.version),
     }
     winSend(IPC.UPDATE_AVAILABLE, payload)
+
+    // Live titlebar indicator event
+    const live: LiveUpdateAvailablePayload = { available: true, version: info.version }
+    winSend(IPC.EVT_UPDATE_AVAILABLE, live)
   })
 
   autoUpdater.on('update-not-available', () => {
     console.log('[updates] update-not-available')
     winSend(IPC.UPDATE_NOT_AVAILABLE)
+
+    const live: LiveUpdateAvailablePayload = { available: false }
+    winSend(IPC.EVT_UPDATE_AVAILABLE, live)
   })
 
   autoUpdater.on('download-progress', (p) => {
-    console.log('[updates] download-progress', { percent: p?.percent, transferred: p?.transferred, total: p?.total })
+    const pct = typeof p?.percent === 'number' ? p.percent : 0
+    console.log('[updates] download progress', `${pct.toFixed(0)}%`)
+
     const payload: UpdateProgressPayload = {
       percent: p.percent,
       bytesPerSecond: p.bytesPerSecond,
@@ -53,12 +73,19 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
       total: p.total,
     }
     winSend(IPC.UPDATE_DOWNLOAD_PROGRESS, payload)
+
+    const live: LiveUpdateProgressPayload = { percent: p.percent }
+    winSend(IPC.EVT_UPDATE_PROGRESS, live)
   })
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('[updates] update-downloaded', { version: info?.version })
+    console.log('[updates] update ready', { version: info?.version })
+
     const payload: UpdateDownloadedPayload = { version: info.version }
     winSend(IPC.UPDATE_DOWNLOADED, payload)
+
+    const live: LiveUpdateReadyPayload = { version: info.version }
+    winSend(IPC.EVT_UPDATE_READY, live)
   })
 
   autoUpdater.on('error', (err) => {
@@ -79,6 +106,29 @@ export async function checkForUpdates() {
   return autoUpdater.checkForUpdates()
 }
 
+export async function startBackgroundUpdatePolling() {
+  const { app } = await import('electron')
+  if (!app.isPackaged) return
+  if (pollingTimer) return
+
+  const poll = async () => {
+    console.log('[updates] polling')
+    try {
+      await autoUpdater.checkForUpdates()
+    } catch (e: any) {
+      console.warn('[updates] polling error', e?.message ?? String(e))
+    }
+  }
+
+  // immediate
+  void poll()
+
+  // every 10 minutes
+  pollingTimer = setInterval(() => {
+    void poll()
+  }, 10 * 60 * 1000)
+}
+
 export async function downloadUpdate() {
   const { app } = await import('electron')
   if (!app.isPackaged) {
@@ -96,5 +146,5 @@ export async function quitAndInstall() {
     return
   }
   console.log('[updates] quitAndInstall()')
-  autoUpdater.quitAndInstall()
+  autoUpdater.quitAndInstall(false, true)
 }

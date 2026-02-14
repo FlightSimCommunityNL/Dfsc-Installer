@@ -50,7 +50,7 @@ export function ReleaseNotesPanel(props: Props) {
     setError(null)
 
     try {
-      const res = await window.dsfc.releaseNotes.fetch(props.releaseNotesUrl)
+      const res = await window.dfsc.releaseNotes.fetch(props.releaseNotesUrl)
       const body = String(res?.body ?? '')
       const contentType = String(res?.contentType ?? '')
 
@@ -100,7 +100,7 @@ export function ReleaseNotesPanel(props: Props) {
     const href = a.getAttribute('href') || ''
     if (/^https?:\/\//i.test(href)) {
       evt.preventDefault()
-      window.dsfc.external.open(href)
+      window.dfsc.external.open(href)
     }
   }
 

@@ -3,7 +3,7 @@ import { join } from 'path'
 import path from 'path'
 import { MACOS_TRAFFIC_LIGHT_POS } from '@shared/windowChrome'
 import { registerIpc } from './ipc'
-import { initUpdateManager } from './updater'
+import { initUpdateManager, startBackgroundUpdatePolling } from './updater'
 import updater from 'electron-updater'
 import { IPC } from '@shared/ipc'
 import { createSplashWindow } from './splash'
@@ -310,6 +310,7 @@ app.whenReady().then(async () => {
     mainWindow = createWindow()
     registerIpc(() => mainWindow)
     initUpdateManager(() => mainWindow)
+    void startBackgroundUpdatePolling()
 
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close()
@@ -356,6 +357,7 @@ app.on('activate', () => {
   mainWindow = createWindow()
   registerIpc(() => mainWindow)
   initUpdateManager(() => mainWindow)
+  void startBackgroundUpdatePolling()
 })
 
 app.on('window-all-closed', () => {

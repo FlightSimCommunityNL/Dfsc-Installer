@@ -23,13 +23,22 @@ export const IPC = {
   UPDATE_DOWNLOAD: 'update:download',
   UPDATE_QUIT_INSTALL: 'update:quitAndInstall',
 
-  // App update events
+  // Live/background update indicator commands (aliases)
+  IPC_UPDATE_DOWNLOAD: 'updates:download',
+  IPC_UPDATE_INSTALL: 'updates:install',
+
+  // App update events (existing)
   UPDATE_CHECKING: 'update:checking',
   UPDATE_AVAILABLE: 'update:available',
   UPDATE_NOT_AVAILABLE: 'update:not-available',
   UPDATE_DOWNLOAD_PROGRESS: 'update:download-progress',
   UPDATE_DOWNLOADED: 'update:downloaded',
   UPDATE_ERROR: 'update:error',
+
+  // Live/background update indicator events
+  EVT_UPDATE_AVAILABLE: 'evt:updateAvailable',
+  EVT_UPDATE_PROGRESS: 'evt:updateProgress',
+  EVT_UPDATE_READY: 'evt:updateReady',
 
   OPEN_EXTERNAL: 'external:open',
   SYSTEM_LOCALE_GET: 'systemLocale:get',
@@ -73,3 +82,8 @@ export type UpdateProgressPayload = {
 }
 export type UpdateDownloadedPayload = { version: string }
 export type UpdateErrorPayload = { message: string }
+
+// Live/background update indicator payloads
+export type LiveUpdateAvailablePayload = { available: boolean; version?: string }
+export type LiveUpdateProgressPayload = { percent: number }
+export type LiveUpdateReadyPayload = { version: string }

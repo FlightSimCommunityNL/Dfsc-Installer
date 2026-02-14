@@ -61,7 +61,7 @@ export function SelectionPane(props: {
       <div className="border-t border-border p-3">
         <FooterButton
           label={props.t('links.discord')}
-          onClick={() => window.dsfc.external.open(DISCORD_URL)}
+          onClick={() => window.dfsc.external.open(DISCORD_URL)}
           className="w-full"
         />
       </div>

@@ -7,7 +7,9 @@ import type {
   IpcSettingsSetArgs,
   IpcInstallProgressEvent,
   IpcSystemDiskSpaceResult,
-  UpdaterEvent,
+  LiveUpdateAvailablePayload,
+  LiveUpdateProgressPayload,
+  LiveUpdateReadyPayload,
 } from '@shared/ipc'
 import { IPC } from '@shared/ipc'
 
@@ -38,9 +40,30 @@ const api = {
     reconcile: () => ipcRenderer.invoke(IPC.ADDON_RECONCILE),
   },
   updates: {
+    // existing controls (Settings pane)
     check: () => ipcRenderer.invoke(IPC.UPDATE_CHECK),
     download: () => ipcRenderer.invoke(IPC.UPDATE_DOWNLOAD),
     quitAndInstall: () => ipcRenderer.invoke(IPC.UPDATE_QUIT_INSTALL),
+
+    // live titlebar indicator controls
+    downloadLive: () => ipcRenderer.invoke(IPC.IPC_UPDATE_DOWNLOAD),
+    installLive: () => ipcRenderer.invoke(IPC.IPC_UPDATE_INSTALL),
+
+    onAvailable: (cb: (payload: LiveUpdateAvailablePayload) => void) => {
+      const listener = (_: unknown, payload: LiveUpdateAvailablePayload) => cb(payload)
+      ipcRenderer.on(IPC.EVT_UPDATE_AVAILABLE, listener)
+      return () => ipcRenderer.removeListener(IPC.EVT_UPDATE_AVAILABLE, listener)
+    },
+    onProgress: (cb: (payload: LiveUpdateProgressPayload) => void) => {
+      const listener = (_: unknown, payload: LiveUpdateProgressPayload) => cb(payload)
+      ipcRenderer.on(IPC.EVT_UPDATE_PROGRESS, listener)
+      return () => ipcRenderer.removeListener(IPC.EVT_UPDATE_PROGRESS, listener)
+    },
+    onReady: (cb: (payload: LiveUpdateReadyPayload) => void) => {
+      const listener = (_: unknown, payload: LiveUpdateReadyPayload) => cb(payload)
+      ipcRenderer.on(IPC.EVT_UPDATE_READY, listener)
+      return () => ipcRenderer.removeListener(IPC.EVT_UPDATE_READY, listener)
+    },
   },
   external: {
     open: (url: string) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, { url }),
@@ -101,6 +124,6 @@ const api = {
   },
 }
 
-contextBridge.exposeInMainWorld('dsfc', api)
+contextBridge.exposeInMainWorld('dfsc', api)
 
-export type DsfcApi = typeof api
+export type DfscApi = typeof api

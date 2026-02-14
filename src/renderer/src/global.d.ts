@@ -1,8 +1,8 @@
-import type { DsfcApi } from '../../preload/index'
+import type { DfscApi } from '../../preload/index'
 
 declare global {
   interface Window {
-    dsfc: DsfcApi
+    dfsc: DfscApi
   }
 }
 

@@ -51,12 +51,12 @@ export function App() {
   const [communityRequiredOpen, setCommunityRequiredOpen] = useState(false)
 
   useEffect(() => {
-    window.dsfc.system.getLocale().then((l) => setSystemLocale(typeof l === 'string' ? l : null)).catch(() => {
+    window.dfsc.system.getLocale().then((l) => setSystemLocale(typeof l === 'string' ? l : null)).catch(() => {
       // renderer fallback
       setSystemLocale(typeof navigator !== 'undefined' ? navigator.language : null)
     })
 
-    window.dsfc.settings.get().then((s) => {
+    window.dfsc.settings.get().then((s) => {
       setState(s)
       setMsStorePkgDraft(s.settings.windowsMsStorePackageFamilyName ?? '')
       setCandidatesDraft((s.settings.windowsCommunityCandidates ?? []).join('\n'))
@@ -64,7 +64,7 @@ export function App() {
       setLanguageModeDraft((s.settings.languageMode ?? 'system') as 'system' | 'en' | 'nl')
     })
 
-    window.dsfc.manifest.fetch().then((res) => {
+    window.dfsc.manifest.fetch().then((res) => {
       setManifest(res.manifest)
       setOfflineMode(res.mode === 'offline')
 
@@ -73,8 +73,8 @@ export function App() {
       setSelectedCategoryId((prev) => (prev ? prev : m.categories[0]?.id ?? null))
     })
 
-    const off1 = window.dsfc.onLog((l) => setLogLines((prev) => [...prev.slice(-400), l]))
-    const off2 = window.dsfc.onInstallProgress((evt) => {
+    const off1 = window.dfsc.onLog((l) => setLogLines((prev) => [...prev.slice(-400), l]))
+    const off2 = window.dfsc.onInstallProgress((evt) => {
       setInstallProgress((prev) => ({
         ...prev,
         [evt.addonId]: {
@@ -86,15 +86,15 @@ export function App() {
       }))
     })
 
-    const offU1 = window.dsfc.onUpdateChecking(() => setUpdateState({ status: 'checking' }))
-    const offU2 = window.dsfc.onUpdateAvailable((p: any) => setUpdateState({ status: 'available', ...p }))
-    const offU3 = window.dsfc.onUpdateNotAvailable(() => setUpdateState({ status: 'not-available' }))
-    const offU4 = window.dsfc.onUpdateProgress((p: any) => setUpdateState({ status: 'progress', ...p }))
-    const offU5 = window.dsfc.onUpdateDownloaded((p: any) => setUpdateState({ status: 'downloaded', ...p }))
-    const offU6 = window.dsfc.onUpdateError((p: any) => setUpdateState({ status: 'error', message: p?.message ?? String(p) }))
+    const offU1 = window.dfsc.onUpdateChecking(() => setUpdateState({ status: 'checking' }))
+    const offU2 = window.dfsc.onUpdateAvailable((p: any) => setUpdateState({ status: 'available', ...p }))
+    const offU3 = window.dfsc.onUpdateNotAvailable(() => setUpdateState({ status: 'not-available' }))
+    const offU4 = window.dfsc.onUpdateProgress((p: any) => setUpdateState({ status: 'progress', ...p }))
+    const offU5 = window.dfsc.onUpdateDownloaded((p: any) => setUpdateState({ status: 'downloaded', ...p }))
+    const offU6 = window.dfsc.onUpdateError((p: any) => setUpdateState({ status: 'error', message: p?.message ?? String(p) }))
 
     // reconcile in background
-    window.dsfc.addon.reconcile().then(setState).catch(() => {})
+    window.dfsc.addon.reconcile().then(setState).catch(() => {})
 
     return () => {
       off1()
@@ -158,8 +158,8 @@ export function App() {
   const onInstallOrUpdate = async () => {
     if (!selectedAddon) return
     try {
-      await window.dsfc.addon.install({ addonId: selectedAddon.id, channel })
-      const next = await window.dsfc.settings.get()
+      await window.dfsc.addon.install({ addonId: selectedAddon.id, channel })
+      const next = await window.dfsc.settings.get()
       setState(next)
     } catch (e: any) {
       const msg = e?.message ?? String(e)
@@ -201,8 +201,8 @@ export function App() {
   const onUninstall = async () => {
     if (!selectedAddon) return
     try {
-      await window.dsfc.addon.uninstall({ addonId: selectedAddon.id })
-      const next = await window.dsfc.settings.get()
+      await window.dfsc.addon.uninstall({ addonId: selectedAddon.id })
+      const next = await window.dfsc.settings.get()
       setState(next)
     } catch (e: any) {
       setLogLines((prev) => [...prev, `[uninstall] ERROR: ${e?.message ?? String(e)}`])
@@ -215,14 +215,14 @@ export function App() {
       .map((l) => l.trim())
       .filter(Boolean)
 
-    await window.dsfc.settings.set({
+    await window.dfsc.settings.set({
       windowsMsStorePackageFamilyName: msStorePkgDraft.trim() || undefined,
       windowsCommunityCandidates: candidates,
       theme: themeDraft,
       languageMode: languageModeDraft,
     })
 
-    const next = await window.dsfc.settings.get()
+    const next = await window.dfsc.settings.get()
     setState(next)
     setShowSettings(false)
   }
@@ -242,8 +242,8 @@ export function App() {
 
   const onBrowseCommunity = async () => {
     try {
-      await window.dsfc.community.browse()
-      const next = await window.dsfc.settings.get()
+      await window.dfsc.community.browse()
+      const next = await window.dfsc.settings.get()
       setState(next)
     } catch (e: any) {
       setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
@@ -252,8 +252,8 @@ export function App() {
 
   const onBrowseInstallPath = async () => {
     try {
-      const picked = await (window.dsfc as any).installPath.browse()
-      const next = await window.dsfc.settings.get()
+      const picked = await window.dfsc.installPath.browse()
+      const next = await window.dfsc.settings.get()
       setState(next)
       if (typeof picked === 'string' && picked) {
         setInstallPathResult(`${t('settings.installPath.found')} ${picked}`)
@@ -266,8 +266,8 @@ export function App() {
 
   const onUseCommunityForInstallPath = async () => {
     try {
-      await (window.dsfc as any).installPath.useCommunityFolder()
-      const next = await window.dsfc.settings.get()
+      await window.dfsc.installPath.useCommunityFolder()
+      const next = await window.dfsc.settings.get()
       setState(next)
       const resolved = (next.settings.installPath ?? next.settings.communityPath) as string | null
       if (resolved) setInstallPathResult(`${t('settings.installPath.found')} ${resolved}`)
@@ -278,7 +278,7 @@ export function App() {
 
   const onTestInstallPath = async () => {
     try {
-      await (window.dsfc as any).installPath.test()
+      await window.dfsc.installPath.test()
       setInstallPathResult(t('settings.installPath.test.ok'))
     } catch (e: any) {
       setInstallPathResult(t('settings.installPath.test.fail'))
@@ -287,8 +287,8 @@ export function App() {
 
   const onAutoDetectCommunity = async () => {
     try {
-      const detected = await window.dsfc.community.detect()
-      const next = await window.dsfc.settings.get()
+      const detected = await window.dfsc.community.detect()
+      const next = await window.dfsc.settings.get()
       setState(next)
 
       if (typeof detected === 'string' && detected) {
@@ -304,7 +304,7 @@ export function App() {
 
   const onTestCommunity = async () => {
     try {
-      await window.dsfc.community.test()
+      await window.dfsc.community.test()
       setLogLines((prev) => [...prev, `[community] ${t('settings.testPath.ok')}`])
     } catch (e: any) {
       setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
@@ -359,9 +359,9 @@ export function App() {
           onUninstall={onUninstall}
           logs={logLines}
           updateState={updateState}
-          onCheckUpdates={() => window.dsfc.updates.check()}
-          onDownloadUpdate={() => window.dsfc.updates.download()}
-          onRestartToInstall={() => window.dsfc.updates.quitAndInstall()}
+          onCheckUpdates={() => window.dfsc.updates.check()}
+          onDownloadUpdate={() => window.dfsc.updates.download()}
+          onRestartToInstall={() => window.dfsc.updates.quitAndInstall()}
         />
         </div>
       </div>

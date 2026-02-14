@@ -29,7 +29,7 @@ export function InstallConfirmModal(props: {
     setDisk(null)
     setDiskError(null)
 
-    window.dsfc.system
+    window.dfsc.system
       .getDiskSpace(props.installPath)
       .then((res) => setDisk(res))
       .catch((e: any) => setDiskError(e?.message ?? String(e)))

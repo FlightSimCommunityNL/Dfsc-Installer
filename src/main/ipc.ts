@@ -363,6 +363,15 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     return quitAndInstall()
   })
 
+  // Live/background update indicator IPC aliases
+  ipcMain.handle(IPC.IPC_UPDATE_DOWNLOAD, async () => {
+    return downloadUpdate()
+  })
+
+  ipcMain.handle(IPC.IPC_UPDATE_INSTALL, async () => {
+    return quitAndInstall()
+  })
+
   ipcMain.handle(IPC.OPEN_EXTERNAL, async (_evt, args: { url: string }) => {
     // Only allow http(s) links.
     const url = String(args?.url ?? '')

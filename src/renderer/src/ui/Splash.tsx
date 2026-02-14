@@ -57,7 +57,7 @@ export function Splash() {
   })
 
   useEffect(() => {
-    const off = window.dsfc.splash.onStatus((p: any) => {
+    const off = window.dfsc.splash.onStatus((p: any) => {
       if (!p || typeof p !== 'object') return
       setStatus({
         phase: p.phase ?? 'starting',
@@ -102,13 +102,13 @@ export function Splash() {
               <div className="mt-3 flex gap-2">
                 <button
                   className="dsfc-no-drag px-3 py-2 rounded-lg border border-accent2/40 bg-accent2/20 text-xs text-text-200 hover:bg-accent2/30"
-                  onClick={() => window.dsfc.splash.retryConnectivity()}
+                  onClick={() => window.dfsc.splash.retryConnectivity()}
                 >
                   {t('retry')}
                 </button>
                 <button
                   className="dsfc-no-drag px-3 py-2 rounded-lg border border-border bg-bg-800 text-xs text-text-200 hover:bg-bg-700"
-                  onClick={() => window.dsfc.splash.quit()}
+                  onClick={() => window.dfsc.splash.quit()}
                 >
                   {t('quit')}
                 </button>
