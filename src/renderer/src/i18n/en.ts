@@ -103,6 +103,17 @@ export const en = {
   'settings.language.en': 'English',
   'settings.language.nl': 'Nederlands',
 
+  // Settings: app updates
+  'settings.updates.title': 'App Updates',
+  'settings.updates.check': 'Check for updates',
+  'settings.updates.checking': 'Checking…',
+  'settings.updates.install': 'Install update',
+  'settings.updates.downloading': 'Downloading…',
+  'settings.updates.uptodate': "You're up to date.",
+  'settings.updates.available': 'Update available:',
+  'settings.updates.ready': 'Downloaded. Ready to install.',
+  'settings.updates.error': 'Update check failed',
+
   // Settings: about
   'settings.aboutTitle': 'About',
   'settings.installedVersion': 'Installed Version',

@@ -3,13 +3,13 @@ import type { AddonChannelKey, LocalState, ManifestAddon, RemoteManifest } from 
 
 import { IconBar, type IconCategory } from './IconBar'
 import { SelectionPane } from './SelectionPane'
+import { ContentHero } from './ContentHero'
 import { ContentPane } from './ContentPane'
 import { ActionsPane } from './ActionsPane'
 import { SettingsModal } from './SettingsModal'
 import { InstallConfirmModal } from './InstallConfirmModal'
 import { CommunityPathRequiredModal } from './CommunityPathRequiredModal'
 import { TitleBar } from './TitleBar'
-import { HeroBanner } from './HeroBanner'
 import { createT, mapLocaleToLang, type SupportedLang } from '../i18n'
 
 type Category = { id: string; name: string }
@@ -298,18 +298,11 @@ export function App() {
   const currentProgress = selectedAddon ? installProgress[selectedAddon.id] : undefined
 
   return (
-    <div className="h-screen w-screen bg-bg-800 text-text-100 overflow-hidden grid grid-rows-[auto_1fr]">
+    <div className="h-full w-full bg-bg-800 text-text-100 overflow-hidden grid grid-rows-[auto_1fr]">
       <TitleBar title="Dfsc Installer" offline={offlineMode} version={appVersion} />
 
-      <div
-        className="
-        grid
-        h-full
-        grid-cols-[76px_340px_1fr_220px]
-        grid-rows-[auto_1fr]
-        "
-      >
-        <div className="row-span-2 col-start-1">
+      <div className="h-full min-h-0 min-w-0 grid grid-cols-[76px_340px_1fr_240px] grid-rows-[auto_1fr] overflow-hidden">
+        <div className="h-full min-h-0 min-w-0 overflow-hidden row-span-2 col-start-1">
           <IconBar
             categories={iconCategories}
             selectedCategoryId={selectedCategoryId ?? iconCategories[0]?.id ?? null}
@@ -322,7 +315,7 @@ export function App() {
           />
         </div>
 
-        <div className="row-span-2 col-start-2">
+        <div className="h-full min-h-0 min-w-0 overflow-hidden row-span-2 col-start-2">
           <SelectionPane
             categoryName={selectedCategoryName}
             t={t}
@@ -334,15 +327,15 @@ export function App() {
           />
         </div>
 
-        <div className="col-start-3 col-span-2 row-start-1">
-          <HeroBanner addon={selectedAddon} selectedChannel={channel} />
+        <div className="h-full min-h-0 min-w-0 overflow-hidden col-start-3 col-span-2 row-start-1">
+          <ContentHero addon={selectedAddon} selectedChannel={channel} />
         </div>
 
-        <div className="col-start-3 row-start-2 min-h-0 overflow-hidden">
+        <div className="h-full min-h-0 min-w-0 overflow-hidden col-start-3 row-start-2">
           <ContentPane addon={selectedAddon} selectedChannel={channel} onSelectChannel={setChannel} t={t} />
         </div>
 
-        <div className="col-start-4 row-start-2">
+        <div className="h-full min-h-0 min-w-0 overflow-hidden col-start-4 row-start-2">
           <ActionsPane
             addon={selectedAddon}
             t={t}
@@ -353,10 +346,6 @@ export function App() {
             onRequestInstallOrUpdate={requestInstallOrUpdate}
             onUninstall={onUninstall}
             logs={logLines}
-            updateState={updateState}
-            onCheckUpdates={() => window.dfsc.updates.check()}
-            onDownloadUpdate={() => window.dfsc.updates.download()}
-            onRestartToInstall={() => window.dfsc.updates.quitAndInstall()}
           />
         </div>
       </div>
@@ -391,6 +380,18 @@ export function App() {
         t={t}
         appVersion={appVersion}
         appIsPackaged={appIsPackaged}
+        updateState={updateState}
+        onCheckUpdates={() => window.dfsc.updates.check()}
+        onInstallUpdate={async () => {
+          if (updateState.status === 'downloaded') {
+            await window.dfsc.updates.quitAndInstall()
+            return
+          }
+          if (updateState.status === 'available') {
+            await window.dfsc.updates.download()
+            await window.dfsc.updates.quitAndInstall()
+          }
+        }}
         communityPath={state?.settings.communityPath ?? null}
         installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
         installPathMode={(state?.settings.installPathMode as any) ?? 'followCommunity'}

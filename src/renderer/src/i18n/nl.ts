@@ -103,6 +103,17 @@ export const nl = {
   'settings.language.en': 'English',
   'settings.language.nl': 'Nederlands',
 
+  // Instellingen: app-updates
+  'settings.updates.title': 'App-updates',
+  'settings.updates.check': 'Controleren op updates',
+  'settings.updates.checking': 'Controleren…',
+  'settings.updates.install': 'Update installeren',
+  'settings.updates.downloading': 'Downloaden…',
+  'settings.updates.uptodate': 'Je gebruikt de nieuwste versie.',
+  'settings.updates.available': 'Update beschikbaar:',
+  'settings.updates.ready': 'Gedownload. Klaar om te installeren.',
+  'settings.updates.error': 'Updatecontrole mislukt',
+
   // Instellingen: over
   'settings.aboutTitle': 'Over',
   'settings.installedVersion': 'Geïnstalleerde versie',

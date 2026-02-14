@@ -16,6 +16,7 @@ const CATEGORY_ICON_MAP: Record<string, IconKind> = {
   scenery: 'map',
 }
 
+
 export function IconBar(props: {
   categories: IconCategory[]
   selectedCategoryId: string | null
@@ -24,9 +25,9 @@ export function IconBar(props: {
   status?: 'loading' | 'offline' | 'ready'
 }) {
   return (
-    <div className="h-full min-h-0 min-w-0 w-[76px] bg-bg-900 border-r border-border flex flex-col overflow-hidden">
-      {/* Top: logo */}
-      <div className="pt-3 pb-2 flex flex-col items-center gap-3">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden w-[76px] bg-bg-900 border-r border-border">
+      {/* Top (fixed) */}
+      <div className="flex-shrink-0 pt-3 pb-2 flex flex-col items-center gap-3">
         <img src={dfscLogo} alt="DFSC" className="h-8 w-auto" draggable={false} />
 
         <div className="h-3 flex items-center justify-center">
@@ -38,7 +39,7 @@ export function IconBar(props: {
         </div>
       </div>
 
-      {/* Middle: categories (scrollable if needed) */}
+      {/* Middle scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-3 py-2">
         {props.categories.map((c) => {
           const selected = props.selectedCategoryId === c.id
@@ -60,8 +61,8 @@ export function IconBar(props: {
         })}
       </div>
 
-      {/* Bottom: pinned controls */}
-      <div className="mt-auto pb-4 pt-2 flex-shrink-0 flex flex-col items-center gap-2">
+      {/* Bottom pinned */}
+      <div className="flex-shrink-0 pb-3 flex flex-col items-center">
         <button
           title="Settings"
           onClick={props.onOpenSettings}

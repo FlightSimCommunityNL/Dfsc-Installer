@@ -44,10 +44,9 @@ export function ContentPane(props: {
   const channelVersion = typeof selectedCh?.version === 'string' ? selectedCh.version : null
 
   return (
-    <div className="w-full min-w-0 h-full min-h-0 bg-bg-800 overflow-y-auto overflow-x-hidden">
-      <div className="px-8 pt-5">
-        <div className="mt-0">
-          <div className="text-sm text-text-400">{props.t('content.chooseVersion')}</div>
+    <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden px-8 pt-5 pb-8 bg-bg-800">
+      <div className="mt-0">
+        <div className="text-sm text-text-400">{props.t('content.chooseVersion')}</div>
 
           {availableChannels.length ? (
             <div className="mt-3 flex gap-4 items-stretch justify-start">
@@ -84,14 +83,11 @@ export function ContentPane(props: {
           />
         </div>
 
-        <div className="mt-6">
-          <div className="text-sm text-text-400">{props.t('content.description')}</div>
-          <div className="mt-2 rounded-xl border border-border bg-bg-700 p-4 text-sm text-text-200 whitespace-pre-wrap">
-            {a.description}
-          </div>
+      <div className="mt-6">
+        <div className="text-sm text-text-400">{props.t('content.description')}</div>
+        <div className="mt-2 rounded-xl border border-border bg-bg-700 p-4 text-sm text-text-200 whitespace-pre-wrap">
+          {a.description}
         </div>
-
-        <div className="h-8" />
       </div>
     </div>
   )

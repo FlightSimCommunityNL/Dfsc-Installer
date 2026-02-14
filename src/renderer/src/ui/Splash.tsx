@@ -75,7 +75,7 @@ export function Splash() {
   }, [status.phase, status.percent, lang])
 
   return (
-    <div className="h-screen w-screen bg-[#101828] text-text-100 flex items-center justify-center">
+    <div className="h-full w-full bg-[#101828] text-text-100 flex items-center justify-center">
       <div className="w-[420px] text-center">
         <img src={dfscLogo} className="h-16 w-auto mx-auto" alt="DFSC" draggable={false} />
         <div className="mt-4 text-sm font-semibold">{progressText ?? status.message}</div>

@@ -8,6 +8,18 @@ export function SettingsModal(props: {
   appVersion: string | null
   appIsPackaged: boolean | null
 
+  updateState:
+    | { status: 'idle' }
+    | { status: 'checking' }
+    | { status: 'available'; version: string; releaseNotes?: string; releaseUrl?: string }
+    | { status: 'not-available' }
+    | { status: 'progress'; percent: number; transferred: number; total: number; bytesPerSecond: number }
+    | { status: 'downloaded'; version: string }
+    | { status: 'error'; message: string }
+
+  onCheckUpdates: () => Promise<any>
+  onInstallUpdate: () => Promise<any>
+
   communityPath: string | null
   installPath: string | null
   installPathMode: 'followCommunity' | 'custom'
@@ -113,6 +125,59 @@ export function SettingsModal(props: {
               <option value="nl">{props.t('settings.language.nl')}</option>
             </select>
           </label>
+
+          {/* App updates */}
+          <div className="col-span-12 mt-2">
+            <div className="text-xs text-text-400 mb-1">{props.t('settings.updates.title')}</div>
+            <div className="rounded-xl border border-border bg-bg-800 px-3 py-3">
+              <button
+                disabled={props.updateState.status === 'checking' || props.updateState.status === 'progress'}
+                onClick={() => {
+                  if (props.updateState.status === 'available' || props.updateState.status === 'downloaded') {
+                    void props.onInstallUpdate()
+                    return
+                  }
+                  void props.onCheckUpdates()
+                }}
+                className={
+                  `w-full px-4 py-2 rounded-xl text-sm font-semibold transition ` +
+                  (props.updateState.status === 'checking' || props.updateState.status === 'progress'
+                    ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
+                    : 'bg-accent text-black hover:brightness-110')
+                }
+              >
+                {props.updateState.status === 'checking'
+                  ? props.t('settings.updates.checking')
+                  : props.updateState.status === 'progress'
+                    ? `${props.t('settings.updates.downloading')} ${(props.updateState.percent ?? 0).toFixed(0)}%`
+                    : props.updateState.status === 'available' || props.updateState.status === 'downloaded'
+                      ? props.t('settings.updates.install')
+                      : props.t('settings.updates.check')}
+              </button>
+
+              {props.updateState.status === 'progress' ? (
+                <div className="mt-3">
+                  <div className="h-2 bg-bg-900 rounded overflow-hidden">
+                    <div className="h-2 bg-accent" style={{ width: `${props.updateState.percent}%` }} />
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-3 text-[11px] text-text-400">
+                {props.updateState.status === 'not-available'
+                  ? props.t('settings.updates.uptodate')
+                  : props.updateState.status === 'available'
+                    ? `${props.t('settings.updates.available')} v${props.updateState.version}`
+                    : props.updateState.status === 'downloaded'
+                      ? props.t('settings.updates.ready')
+                      : props.updateState.status === 'progress'
+                        ? `${props.t('settings.updates.downloading')} ${(props.updateState.percent ?? 0).toFixed(0)}%`
+                        : props.updateState.status === 'error'
+                          ? `${props.t('settings.updates.error')}: ${props.updateState.message}`
+                          : ''}
+              </div>
+            </div>
+          </div>
 
           {/* About / app version */}
           <div className="col-span-12 mt-2">
