@@ -18,8 +18,26 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+
+      - name: Debug list build resources
+        shell: pwsh
+        run: |
+          Write-Host "PWD:"; pwd
+          Write-Host "Repo root:"; dir
+          Write-Host "build folder:"; dir build
+          Write-Host "workflows folder:"; dir .github\workflows
+
+      - name: Verify icon exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path "build\icon.ico")) {
+            Write-Error "Missing build\icon.ico (not committed or wrong path/name)";
+            exit 1
+          }
+
       - name: Build app
         run: npm run build
+
       - name: Build & publish (Windows x64)
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}

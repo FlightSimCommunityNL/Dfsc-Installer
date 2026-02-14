@@ -13,7 +13,11 @@ package-lock.json.bak
 # =========================
 dist/
 out/
-build/
+# Keep build outputs ignored, but allow shipping build resources (icons).
+build/*
+!build/icon.ico
+!build/icon.png
+!build/icon.icns
 release/
 app/dist/
 app/out/
