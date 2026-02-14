@@ -7,6 +7,7 @@ import type {
   IpcSettingsSetArgs,
   IpcInstallProgressEvent,
   IpcSystemDiskSpaceResult,
+  IpcSystemRemoteFileSizeResult,
   IpcSystemAppVersionResult,
   LiveUpdateAvailablePayload,
   LiveUpdateProgressPayload,
@@ -73,6 +74,8 @@ const api = {
     getLocale: () => ipcRenderer.invoke(IPC.SYSTEM_LOCALE_GET),
     getDiskSpace: (targetPath: string): Promise<IpcSystemDiskSpaceResult> =>
       ipcRenderer.invoke(IPC.SYSTEM_DISKSPACE_GET, { targetPath }),
+    getRemoteFileSize: (url: string): Promise<IpcSystemRemoteFileSizeResult> =>
+      ipcRenderer.invoke(IPC.SYSTEM_REMOTE_FILE_SIZE_GET, { url }),
     getAppVersion: (): Promise<IpcSystemAppVersionResult> => ipcRenderer.invoke(IPC.SYSTEM_GET_APP_VERSION),
   },
   onInstallProgress: (cb: (evt: IpcInstallProgressEvent) => void) => {

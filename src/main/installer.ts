@@ -8,6 +8,7 @@ import fse from 'fs-extra'
 
 import type { InstallProgressEvent, ManifestAddon, ManifestAddonChannel } from '@shared/types'
 import { getTempBaseDir, verifyWritable } from './paths'
+import { getDiskSpaceForPath } from './diskspace'
 
 /**
  * ZIP layout support (common MSFS addon patterns):
@@ -68,6 +69,30 @@ async function listImmediateChildrenWithTypes(dir: string): Promise<string[]> {
 async function listTopLevelEntries(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
   return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name))
+}
+
+async function sumDirBytes(dirPath: string): Promise<number> {
+  let total = 0
+  const entries = await readdir(dirPath, { withFileTypes: true }).catch(() => [])
+  for (const ent of entries) {
+    const p = join(dirPath, ent.name)
+    if (ent.isDirectory()) {
+      total += await sumDirBytes(p)
+    } else if (ent.isFile()) {
+      try {
+        const s = await stat(p)
+        total += s.size
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return total
+}
+
+function requiredBytesFromInstalledSize(installedBytes: number): number {
+  const buffer = 200 * 1024 * 1024
+  return Math.ceil(installedBytes * 1.2 + buffer)
 }
 
 async function buildCandidateRoots(extractDir: string): Promise<string[]> {
@@ -804,8 +829,18 @@ export class AddonInstallerService {
 
       this.log(`[${addon.id}] Installing to ${installPath}`)
       this.log(`[${addon.id}] Raw install folders: ${packages.map((p) => p.folderName).join(', ')}`)
-      emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
 
+      // Final preflight: compute extracted size and verify disk space before atomic move.
+      const extractedBytes = await Promise.all(packages.map((p) => sumDirBytes(p.srcPath))).then((xs) => xs.reduce((a, b) => a + b, 0))
+      const required = requiredBytesFromInstalledSize(extractedBytes)
+      const disk = await getDiskSpaceForPath(installPath)
+      if (disk.freeBytes < required) {
+        throw new Error(
+          `Not enough disk space for ${addon.id}. Required=${required} bytes, free=${disk.freeBytes} bytes.`
+        )
+      }
+
+      emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
       const installedPaths = await atomicInstallFolders({ packages, communityPath: installPath })
 
       emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
@@ -841,8 +876,18 @@ export class AddonInstallerService {
 
     this.log(`[${addon.id}] Installing to ${installPath}`)
     this.log(`[${addon.id}] Package folders: ${packages.map((p) => p.folderName).join(', ')}`)
-    emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
 
+    // Final preflight: compute extracted size and verify disk space before atomic move.
+    const extractedBytes = await Promise.all(packages.map((p) => sumDirBytes(p.srcPath))).then((xs) => xs.reduce((a, b) => a + b, 0))
+    const required = requiredBytesFromInstalledSize(extractedBytes)
+    const disk = await getDiskSpaceForPath(installPath)
+    if (disk.freeBytes < required) {
+      throw new Error(
+        `Not enough disk space for ${addon.id}. Required=${required} bytes, free=${disk.freeBytes} bytes.`
+      )
+    }
+
+    emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
     const installedPaths = await atomicInstallFolders({ packages, communityPath: installPath })
 
     emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })

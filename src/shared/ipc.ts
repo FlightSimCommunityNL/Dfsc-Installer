@@ -43,6 +43,7 @@ export const IPC = {
   OPEN_EXTERNAL: 'external:open',
   SYSTEM_LOCALE_GET: 'systemLocale:get',
   SYSTEM_DISKSPACE_GET: 'systemDiskSpace:get',
+  SYSTEM_REMOTE_FILE_SIZE_GET: 'systemRemoteFileSize:get',
   // App metadata
   SYSTEM_GET_APP_VERSION: 'systemAppVersion:get',
   // Back-compat alias (internal):
@@ -72,6 +73,9 @@ export type IpcOpenExternalArgs = { url: string }
 
 export type IpcSystemDiskSpaceArgs = { targetPath: string }
 export type IpcSystemDiskSpaceResult = { freeBytes: number; totalBytes: number }
+
+export type IpcSystemRemoteFileSizeArgs = { url: string }
+export type IpcSystemRemoteFileSizeResult = { sizeBytes: number | null }
 
 export type IpcSystemAppVersionResult = { version: string; isPackaged: boolean }
 

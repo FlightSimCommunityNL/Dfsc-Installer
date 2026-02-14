@@ -1,7 +1,7 @@
 {
   "name": "dsfc-installer",
   "private": true,
-  "version": "0.1.6",
+  "version": "0.1.65",
   "description": "Dutch Flight Sim Community Installer (Windows-only target)",
   "author": "Grazzy_Duck / Bas",
   "main": "out/main/index.js",
@@ -11,6 +11,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
+    "update:manifest": "node scripts/update-manifest.js",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win --x64"
   },

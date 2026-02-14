@@ -2,9 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react'
 
 type DiskSpace = { freeBytes: number; totalBytes: number }
 
-function formatBytesGB(bytes: number): string {
-  const gb = bytes / (1024 ** 3)
-  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(gb)} GB`
+function formatBytes(bytes: number): string {
+  const n = Number(bytes)
+  if (!Number.isFinite(n) || n <= 0) return '0 B'
+
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
+  let u = 0
+  let v = n
+  while (v >= 1024 && u < units.length - 1) {
+    v /= 1024
+    u++
+  }
+
+  const decimals = u === 0 ? 0 : u === 1 ? 0 : v >= 100 ? 0 : v >= 10 ? 1 : 2
+  const fmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: decimals })
+  return `${fmt.format(v)} ${units[u]}`
 }
 
 export function InstallConfirmModal(props: {
@@ -12,7 +24,7 @@ export function InstallConfirmModal(props: {
   t: (k: any) => string
   action: 'install' | 'update'
   installPath: string | null
-  requiredBytes: number
+  downloadUrl: string | null
   isInstalling?: boolean
   onCancel: () => void
   onConfirm: () => void
@@ -20,6 +32,10 @@ export function InstallConfirmModal(props: {
   const [disk, setDisk] = useState<DiskSpace | null>(null)
   const [diskError, setDiskError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  const [downloadBytes, setDownloadBytes] = useState<number | null>(null)
+  const [downloadLoading, setDownloadLoading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!props.open) return
@@ -36,12 +52,47 @@ export function InstallConfirmModal(props: {
       .finally(() => setLoading(false))
   }, [props.open, props.installPath])
 
+  useEffect(() => {
+    if (!props.open) return
+    if (!props.downloadUrl) {
+      setDownloadBytes(null)
+      setDownloadError(null)
+      setDownloadLoading(false)
+      return
+    }
+
+    setDownloadLoading(true)
+    setDownloadBytes(null)
+    setDownloadError(null)
+
+    window.dfsc.system
+      .getRemoteFileSize(props.downloadUrl)
+      .then((res: any) => {
+        const raw = res?.sizeBytes
+        // Content-Length is a string in HTTP, but our IPC normalizes to number|null.
+        // Still guard against accidental string/NaN.
+        const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseInt(raw, 10) : NaN
+        setDownloadBytes(Number.isFinite(n) && n >= 0 ? n : null)
+      })
+      .catch((e: any) => setDownloadError(e?.message ?? String(e)))
+      .finally(() => setDownloadLoading(false))
+  }, [props.open, props.downloadUrl])
+
   const freeBytes = disk?.freeBytes ?? 0
-  const requiredBytes = props.requiredBytes
+
+  const requiredBytes = useMemo(() => {
+    // Simple + predictable (user-trustworthy):
+    // - if we know download size: require download + 200 MiB
+    // - else: conservative 700 MiB
+    const buffer = 200 * 1024 * 1024
+    const fallback = 700 * 1024 * 1024
+    if (typeof downloadBytes === 'number') return Math.ceil(downloadBytes + buffer)
+    return fallback
+  }, [downloadBytes])
 
   const afterBytes = useMemo(() => {
     if (!disk) return null
-    return freeBytes - requiredBytes
+    return Math.max(0, freeBytes - requiredBytes)
   }, [disk, freeBytes, requiredBytes])
 
   // Deterministic disabled logic for the confirm action.
@@ -75,22 +126,50 @@ export function InstallConfirmModal(props: {
           </div>
 
           <div className="col-span-6">
-            <Stat label={props.t('installConfirm.freeSpace')} value={disk ? formatBytesGB(disk.freeBytes) : loading ? props.t('installConfirm.loading') : '—'} />
+            <Stat
+              label={props.t('installConfirm.freeSpace')}
+              value={disk ? formatBytes(disk.freeBytes) : loading ? props.t('installConfirm.loading') : '—'}
+            />
           </div>
           <div className="col-span-6">
-            <Stat label={props.t('installConfirm.required')} value={formatBytesGB(props.requiredBytes)} accent />
+            <Stat label={props.t('installConfirm.required')} value={formatBytes(requiredBytes)} accent />
+          </div>
+
+          <div className="col-span-12">
+            <Stat
+              label={props.t('installConfirm.downloadSize')}
+              value={
+                downloadLoading
+                  ? props.t('installConfirm.loading')
+                  : typeof downloadBytes === 'number'
+                    ? formatBytes(downloadBytes)
+                    : props.t('installConfirm.unknown')
+              }
+            />
           </div>
           <div className="col-span-12">
             <Stat
               label={props.t('installConfirm.afterInstall')}
-              value={afterBytes == null ? '—' : `${formatBytesGB(afterBytes)}${afterBytes < 0 ? ` (${props.t('installConfirm.negative')})` : ''}`}
-              warn={afterBytes != null && afterBytes < 0}
+              value={afterBytes == null ? '—' : formatBytes(afterBytes)}
+              warn={disk != null && freeBytes < requiredBytes}
             />
           </div>
 
           {diskError ? (
             <div className="col-span-12 text-[11px] text-highlight bg-highlight/10 border border-highlight/30 rounded-xl px-3 py-2">
               {props.t('installConfirm.diskError')}: {diskError}
+            </div>
+          ) : null}
+
+          {downloadError ? (
+            <div className="col-span-12 text-[11px] text-highlight bg-highlight/10 border border-highlight/30 rounded-xl px-3 py-2">
+              {props.t('installConfirm.downloadProbeError')}: {downloadError}
+            </div>
+          ) : null}
+
+          {downloadBytes == null && !downloadLoading ? (
+            <div className="col-span-12 text-[11px] text-text-400 border border-border rounded-xl px-3 py-2 bg-bg-800">
+              {props.t('installConfirm.downloadUnknownWarn')}
             </div>
           ) : null}
 

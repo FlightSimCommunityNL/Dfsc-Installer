@@ -10,10 +10,51 @@ import type {
   IpcReleaseNotesFetchResult,
   IpcSystemDiskSpaceArgs,
   IpcSystemDiskSpaceResult,
+  IpcSystemRemoteFileSizeArgs,
+  IpcSystemRemoteFileSizeResult,
 } from '@shared/ipc'
 import type { ManifestAddonChannel } from '@shared/types'
 
 import { getDiskSpaceForPath } from './diskspace'
+
+async function getRemoteFileSize(url: string): Promise<number | null> {
+  const u = String(url ?? '').trim()
+  if (!/^https?:\/\//i.test(u)) throw new Error('Invalid URL')
+
+  // 1) HEAD
+  try {
+    const res = await request(u, { method: 'HEAD' })
+    const cl = res.headers['content-length']
+    const n = typeof cl === 'string' ? Number(cl) : Array.isArray(cl) ? Number(cl[0]) : NaN
+    if (Number.isFinite(n) && n >= 0) return n
+  } catch {
+    // ignore and fall back
+  }
+
+  // 2) Range GET (bytes=0-0)
+  try {
+    const res = await request(u, { method: 'GET', headers: { Range: 'bytes=0-0' } })
+
+    // Prefer Content-Range: bytes 0-0/12345
+    const cr = res.headers['content-range']
+    const crVal = typeof cr === 'string' ? cr : Array.isArray(cr) ? cr[0] : null
+    if (crVal) {
+      const m = /\/(\d+)\s*$/.exec(crVal)
+      if (m && m[1]) {
+        const total = Number(m[1])
+        if (Number.isFinite(total) && total >= 0) return total
+      }
+    }
+
+    const cl = res.headers['content-length']
+    const n = typeof cl === 'string' ? Number(cl) : Array.isArray(cl) ? Number(cl[0]) : NaN
+    if (Number.isFinite(n) && n >= 0) return n
+  } catch {
+    // ignore
+  }
+
+  return null
+}
 
 import fse from 'fs-extra'
 import { getState, setInstalled, setSettings, store } from './store'
@@ -431,6 +472,15 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
   safeHandle(IPC.SYSTEM_DISKSPACE_GET, async (_evt, args: IpcSystemDiskSpaceArgs): Promise<IpcSystemDiskSpaceResult> => {
     return getDiskSpaceForPath(args?.targetPath)
   })
+
+  safeHandle(
+    IPC.SYSTEM_REMOTE_FILE_SIZE_GET,
+    async (_evt, args: IpcSystemRemoteFileSizeArgs): Promise<IpcSystemRemoteFileSizeResult> => {
+      const url = String(args?.url ?? '')
+      const sizeBytes = await getRemoteFileSize(url)
+      return { sizeBytes }
+    }
+  )
 
   const getAppVersion = async () => {
     const { app } = await import('electron')

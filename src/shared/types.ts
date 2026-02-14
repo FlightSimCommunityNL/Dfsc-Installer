@@ -14,10 +14,6 @@ export interface ManifestAddonChannel {
   /** Legacy/compat download URL (zip). */
   url?: string
   sha256: string
-  /** Download size (zip). */
-  sizeBytes?: number
-  /** Estimated/known extracted installed size (preferred for disk space checks). */
-  installedSizeBytes?: number
   releaseNotesUrl?: string
 }
 

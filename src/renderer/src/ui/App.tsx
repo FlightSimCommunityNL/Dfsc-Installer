@@ -190,16 +190,6 @@ export function App() {
     }
   }
 
-  const requiredBytes = useMemo(() => {
-    const ch = selectedAddon?.channels?.[channel]
-    const sizeBytes = Number(ch?.sizeBytes ?? 0)
-    const installedSizeBytes = typeof ch?.installedSizeBytes === 'number' ? ch.installedSizeBytes : undefined
-
-    const base = installedSizeBytes ?? sizeBytes * 3
-    const buffer = 200 * 1024 * 1024
-    // temp extraction overhead + buffer
-    return Math.ceil(base * 1.2 + buffer)
-  }, [selectedAddon, channel])
 
   const requestInstallOrUpdate = (action: 'install' | 'update') => {
     setConfirmAction(action)
@@ -368,7 +358,7 @@ export function App() {
         t={t}
         action={confirmAction}
         installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
-        requiredBytes={requiredBytes}
+        downloadUrl={(selectedAddon?.channels?.[channel]?.zipUrl ?? selectedAddon?.channels?.[channel]?.url) ?? null}
         isInstalling={currentProgress != null && currentProgress.phase !== 'done'}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={async () => {
