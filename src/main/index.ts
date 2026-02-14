@@ -25,7 +25,7 @@ app.on('before-quit', () => {
   }
 })
 
-function createWindow(): BrowserWindow {
+function createWindow(opts?: { autoShow?: boolean }): BrowserWindow {
   const isMac = process.platform === 'darwin'
   const isWin = process.platform === 'win32'
 
@@ -74,7 +74,10 @@ function createWindow(): BrowserWindow {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  win.once('ready-to-show', () => win.show())
+  const autoShow = opts?.autoShow !== false
+  win.once('ready-to-show', () => {
+    if (autoShow) win.show()
+  })
   return win
 }
 
@@ -84,7 +87,8 @@ function splashSend(payload: any) {
 }
 
 app.whenReady().then(async () => {
-  const STARTUP_TIMEOUT_MS = 6_000
+  const STARTUP_TIMEOUT_MS = 15_000
+  const INSTALL_WATCHDOG_MS = 120_000
   let installingUpdate = false
 
   // Windows: remove default application menu bar (File/Edit/View/...).
@@ -120,7 +124,7 @@ app.whenReady().then(async () => {
   if (!app.isPackaged) {
     setTimeout(() => {
       try {
-        openMainAndCloseSplash()
+        openMainAndCloseSplash({ manifestOk: true, reason: 'dev' })
       } catch {
         // ignore
       }
@@ -146,7 +150,7 @@ app.whenReady().then(async () => {
     console.warn('[startup] timeout fallback triggered')
     if (installingUpdate) return
     try {
-      openMainAndCloseSplash()
+      openMainAndCloseSplash({ manifestOk: false, reason: 'timeout' })
     } catch (e: any) {
       console.error('[startup] timeout openMain failed', e)
     }
@@ -189,11 +193,12 @@ app.whenReady().then(async () => {
     if (!installingUpdate) {
       console.log('[startup] opening main window')
       try {
-        openMainAndCloseSplash()
+        const manifestOk = startupError == null
+        openMainAndCloseSplash({ manifestOk, reason: manifestOk ? 'ok' : 'manifest-failed' })
       } catch (e: any) {
         console.error('[startup] openMain failed', e)
       }
-      console.log('[startup] splash closed')
+      console.log('[startup] main window created')
     }
   }
 
@@ -307,9 +312,35 @@ app.whenReady().then(async () => {
         cleanup()
         installingUpdate = true
         splashSend({ phase: 'installing', message: splashLang === 'nl' ? 'Update installeren…' : 'Installing update…' })
+
+        // If something goes wrong and the installer never exits, fail-open.
+        const watchdog = setTimeout(() => {
+          console.warn('[updates] install watchdog triggered; failing open to main window')
+          try {
+            installingUpdate = false
+            splashSend({
+              phase: 'checking',
+              message:
+                splashLang === 'nl'
+                  ? 'Update installeren duurt te lang. Starten…'
+                  : 'Update install is taking too long. Starting…',
+            })
+            openMainAndCloseSplash({ manifestOk: false, reason: 'update-watchdog' })
+          } catch {
+            // ignore
+          }
+        }, INSTALL_WATCHDOG_MS)
+
         setTimeout(() => {
-          autoUpdater.quitAndInstall(false, true)
-        }, 1200)
+          try {
+            splashSend({ phase: 'restarting', message: splashLang === 'nl' ? 'Herstarten…' : 'Restarting…' })
+            // Force silent install for NSIS (/S).
+            autoUpdater.quitAndInstall(true, true)
+          } finally {
+            clearTimeout(watchdog)
+          }
+        }, 800)
+
         resolve('available')
       })
 
@@ -372,9 +403,14 @@ app.whenReady().then(async () => {
     }
   }
 
-  function openMainAndCloseSplash() {
+  function openMainAndCloseSplash(opts: { manifestOk: boolean; reason: string }) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       // already open
+      try {
+        mainWindow.show()
+      } catch {
+        // ignore
+      }
       if (splashWindow && !splashWindow.isDestroyed()) {
         splashWindow.close()
         splashWindow = null
@@ -382,7 +418,10 @@ app.whenReady().then(async () => {
       return
     }
 
-    mainWindow = createWindow()
+    // Keep splash visible until:
+    // - main window is ready
+    // - manifest gate passed (or we hit a timeout and fail-open)
+    mainWindow = createWindow({ autoShow: false })
     registerIpc(() => mainWindow)
     initUpdateManager(() => mainWindow)
 
@@ -414,12 +453,44 @@ app.whenReady().then(async () => {
 
     void startBackgroundUpdatePolling()
 
-    if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.close()
+    let shown = false
+    const failOpenTimer = setTimeout(() => {
+      if (shown) return
+      shown = true
+      try {
+        mainWindow?.show()
+      } catch {
+        // ignore
+      }
+      try {
+        if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
+      } catch {
+        // ignore
+      }
       splashWindow = null
-    } else {
-      splashWindow = null
-    }
+    }, 12_000)
+
+    mainWindow.once('ready-to-show', () => {
+      // If manifestOk, we can swap splash -> main cleanly.
+      // If not, we still show after a short delay (or failOpenTimer fires).
+      const delay = opts.manifestOk ? 0 : 1200
+      setTimeout(() => {
+        if (shown) return
+        shown = true
+        clearTimeout(failOpenTimer)
+        try {
+          mainWindow?.show()
+        } catch {
+          // ignore
+        }
+        try {
+          if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
+        } catch {
+          // ignore
+        }
+        splashWindow = null
+      }, delay)
+    })
   }
 
   function promiseWithTimeout<T>(p: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -458,7 +529,7 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length !== 0) return
   if (splashWindow && !splashWindow.isDestroyed()) return
 
-  mainWindow = createWindow()
+  mainWindow = createWindow({ autoShow: true })
   registerIpc(() => mainWindow)
   initUpdateManager(() => mainWindow)
   void startBackgroundUpdatePolling()

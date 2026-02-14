@@ -1,5 +1,5 @@
 import updater from 'electron-updater'
-import type { BrowserWindow } from 'electron'
+import { app, type BrowserWindow } from 'electron'
 import { IPC } from '@shared/ipc'
 import type {
   LiveUpdateAvailablePayload,
@@ -69,7 +69,8 @@ export async function installUpdateViaSplashHandoff() {
   }
 
   await new Promise((r) => setTimeout(r, 600))
-  autoUpdater.quitAndInstall(false, true)
+  // Force silent install for NSIS (/S).
+  autoUpdater.quitAndInstall(true, true)
 }
 
 function winSend(channel: string, payload?: any) {
@@ -82,7 +83,14 @@ function winSend(channel: string, payload?: any) {
 export function initUpdateManager(getWin: () => BrowserWindow | null) {
   currentGetWin = getWin
 
-  autoUpdater.autoDownload = false
+  // In dev builds, skip updater entirely.
+  if (!app.isPackaged) {
+    console.log('[updates] initUpdateManager skipped: not packaged')
+    return
+  }
+
+  // In release builds we want Discord-like behavior: download in background and install immediately.
+  autoUpdater.autoDownload = true
 
   // Ensure provider is GitHub Releases.
   // Runtime must NOT require a token for public repos; GH_TOKEN is for CI publishing only.
@@ -120,6 +128,15 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   autoUpdater.on('update-available', (info) => {
     console.log('[updates] update available', { version: info?.version, releaseName: (info as any)?.releaseName })
     controllerState = { kind: 'available', version: info.version }
+
+    // Auto-download immediately (production).
+    if (app.isPackaged) {
+      try {
+        void autoUpdater.downloadUpdate()
+      } catch {
+        // ignore; error event will fire
+      }
+    }
 
     // Existing "Updates" panel event
     const payload: UpdateAvailablePayload = {
@@ -163,6 +180,26 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   autoUpdater.on('update-downloaded', (info) => {
     console.log('[updates] update ready', { version: info?.version, downloadedFile: (info as any)?.downloadedFile })
     controllerState = { kind: 'downloaded', version: info.version }
+
+    // Auto-install immediately (production, silent).
+    try {
+      controllerState = { kind: 'installing', version: info.version }
+      handoff?.hideMain()
+      handoff?.showSplash()
+      handoff?.sendSplash({ phase: 'installing', message: 'Installing update…' })
+    } catch {
+      // ignore
+    }
+
+    setTimeout(() => {
+      try {
+        if (!app.isPackaged) return
+        // Force silent install for NSIS (/S).
+        autoUpdater.quitAndInstall(true, true)
+      } catch {
+        // ignore
+      }
+    }, 800)
 
     const payload: UpdateDownloadedPayload = { version: info.version }
     winSend(IPC.UPDATE_DOWNLOADED, payload)
@@ -286,5 +323,6 @@ export async function quitAndInstall() {
     return
   }
   console.log('[updates] quitAndInstall()')
-  autoUpdater.quitAndInstall(false, true)
+  // Force silent install for NSIS (/S).
+  autoUpdater.quitAndInstall(true, true)
 }
