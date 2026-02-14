@@ -149,8 +149,11 @@ export function App() {
 
   useEffect(() => {
     // When selection changes, default channel to installed channel if present.
-    if (installedRec) setChannel(installedRec.channel)
-  }, [installedRec?.channel])
+    const installedChannel = (installedRec as any)?.installedChannel
+    if (installedChannel === 'stable' || installedChannel === 'beta' || installedChannel === 'dev') {
+      setChannel(installedChannel)
+    }
+  }, [(installedRec as any)?.installedChannel])
 
   const onInstallOrUpdate = async () => {
     if (!selectedAddon) return

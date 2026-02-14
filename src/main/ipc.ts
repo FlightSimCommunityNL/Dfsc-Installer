@@ -120,6 +120,18 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     const state = getState()
     const basePath = state.settings.installPath ?? state.settings.communityPath
 
+    const inferInstalledChannel = (opts: { addon: any; installedVersion: string }): 'stable' | 'beta' | 'dev' | 'unknown' | null => {
+      const v = String(opts.installedVersion ?? '').trim()
+      if (!v || v === 'unknown') return null
+      const keys: Array<'stable' | 'beta' | 'dev'> = ['stable', 'beta', 'dev']
+      for (const k of keys) {
+        const ch = opts.addon?.channels?.[k]
+        const remoteVersion = typeof ch?.version === 'string' ? ch.version : null
+        if (remoteVersion && remoteVersion === v) return k
+      }
+      return 'unknown'
+    }
+
     // If installPath/communityPath isn't set, just prune missing paths from stored state.
     if (!basePath) {
       const installed = { ...state.installed }
@@ -230,11 +242,17 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
           }
         }
 
+        const addon = manifest.addons.find((a) => a.id === addonId)
+        const installedVersion = rec.installedVersion === 'unknown' && inferred ? inferred : rec.installedVersion
+
         setInstalled(addonId, {
           ...rec,
+          installed: true,
           installedPaths: validObservedPaths,
-          installedVersion: rec.installedVersion === 'unknown' && inferred ? inferred : rec.installedVersion,
-        })
+          installedVersion,
+          installPath: rec.installPath ?? basePath,
+          installedChannel: addon ? inferInstalledChannel({ addon, installedVersion }) : (rec as any).installedChannel ?? 'unknown',
+        } as any)
       }
     }
 
@@ -257,10 +275,15 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
         }
       }
 
+      const addon = manifest.addons.find((a) => a.id === addonId)
+      const installedVersion = inferred ?? 'unknown'
+
       setInstalled(addonId, {
         addonId,
-        channel: 'stable',
-        installedVersion: inferred ?? 'unknown',
+        installed: true,
+        installedChannel: addon ? inferInstalledChannel({ addon, installedVersion }) : 'unknown',
+        installedVersion,
+        installPath: basePath,
         installedAt: new Date().toISOString(),
         installedPaths: valid,
       })
@@ -279,6 +302,14 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       const installPath = state.settings.installPath ?? state.settings.communityPath
       if (!installPath) throw new Error('Install path not set')
 
+      const existing = state.installed[args.addonId]
+      if (existing && existing.installed === true) {
+        const installedChannel = (existing as any).installedChannel
+        if (installedChannel && installedChannel !== 'unknown' && installedChannel !== args.channel) {
+          throw new Error('Channel switch not allowed. Uninstall current channel first.')
+        }
+      }
+
       const manifest = lastManifest ?? (await fetchManifest(lastManifestUrl ?? getAddonManifestUrl()))
       const addon = manifest.addons.find((a) => a.id === args.addonId)
       if (!addon) throw new Error(`Addon not found in manifest: ${args.addonId}`)
@@ -289,8 +320,10 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       const result = await installer.installAddon({ addon, channel, installPath, channelKey: args.channel })
       setInstalled(addon.id, {
         addonId: addon.id,
-        channel: args.channel,
+        installed: true,
+        installedChannel: args.channel,
         installedVersion: result.installedVersion,
+        installPath,
         installedAt: new Date().toISOString(),
         installedPaths: result.installedPaths,
       })

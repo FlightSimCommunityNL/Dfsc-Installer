@@ -45,10 +45,20 @@ export interface RemoteManifest {
 
 export interface InstalledAddonRecord {
   addonId: string
-  channel: AddonChannelKey
+  installed: true
+
+  /** The channel currently installed for this addon (single-channel model). */
+  installedChannel: AddonChannelKey | 'unknown' | null
+
+  /** Installed version as read from MSFS package manifest.json (best-effort) or from channel.version when installed by this app. */
   installedVersion: string
+
+  /** Absolute install destination used (installPath/communityPath at time of install). */
+  installPath: string
+
   installedAt: string
-  // Absolute paths of installed folders under Community
+
+  // Absolute paths of installed folders under installPath
   installedPaths: string[]
 }
 

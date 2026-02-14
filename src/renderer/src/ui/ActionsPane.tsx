@@ -56,7 +56,10 @@ export function ActionsPane(props: {
     }
 
     const remoteVersion = ch?.version
-    const updateAvailable = !!remoteVersion && remoteVersion !== props.installed.installedVersion
+    const installedChannel = (props.installed as any).installedChannel as any
+
+    const sameChannel = installedChannel === props.selectedChannel
+    const updateAvailable = sameChannel && !!remoteVersion && remoteVersion !== props.installed.installedVersion
 
     if (!updateAvailable) {
       return {
@@ -153,6 +156,13 @@ export function ActionsPane(props: {
             {(() => {
               // Single source of truth for status-based rendering.
               const isInstalled = props.installed != null
+              const installedChannel = (props.installed as any)?.installedChannel as any
+              const selectedChannel = props.selectedChannel
+              const channelMismatch =
+                isInstalled &&
+                (installedChannel === 'stable' || installedChannel === 'beta' || installedChannel === 'dev') &&
+                installedChannel !== selectedChannel
+
               const hasUpdate = decision.updateAvailable === true
               const isBusy = props.progress != null && props.progress.phase !== 'done'
 
@@ -185,6 +195,35 @@ export function ActionsPane(props: {
                       <span className="inline-flex items-center gap-2">
                         {activeAction === 'installOrUpdate' ? <Spinner /> : null}
                         {props.t('install.install')}
+                      </span>
+                    </button>
+                  </div>
+                )
+              }
+
+              if (channelMismatch) {
+                return (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <div className="text-[11px] text-text-400">
+                      You have <span className="text-text-200 font-semibold">{installedChannel}</span> installed. Uninstall it before installing{' '}
+                      <span className="text-text-200 font-semibold">{selectedChannel}</span>.
+                    </div>
+                    <button
+                      disabled={isBusy}
+                      onClick={() => {
+                        if (isBusy) return
+                        void props.onUninstall()
+                      }}
+                      className={
+                        `px-3 py-3 rounded-xl text-sm font-semibold transition-colors border ` +
+                        (isBusy
+                          ? 'border-red-500 text-red-300 opacity-50 cursor-not-allowed'
+                          : 'border-red-500 text-red-500 hover:bg-red-500/10 cursor-pointer')
+                      }
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {activeAction === 'uninstall' ? <Spinner /> : null}
+                        {props.t('install.uninstall')}
                       </span>
                     </button>
                   </div>

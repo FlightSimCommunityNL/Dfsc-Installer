@@ -24,6 +24,37 @@ export const store = new Store<LocalState>({
 })
 
 export function getState(): LocalState {
+  // Migration: older versions stored installed.channel instead of installedChannel.
+  // Normalize on read so renderer + IPC can rely on the new shape.
+  const s = store.store as any
+  const installed = s.installed ?? {}
+  let changed = false
+
+  for (const [addonId, rec] of Object.entries<any>(installed)) {
+    if (!rec || typeof rec !== 'object') continue
+
+    // If already migrated, skip.
+    if (rec.installed === true && 'installedChannel' in rec && 'installPath' in rec) continue
+
+    const installedChannel = rec.installedChannel ?? rec.channel ?? null
+    const installPath = rec.installPath ?? (s.settings?.installPath ?? s.settings?.communityPath ?? null)
+
+    installed[addonId] = {
+      addonId: rec.addonId ?? addonId,
+      installed: true,
+      installedChannel: installedChannel ?? 'unknown',
+      installedVersion: rec.installedVersion ?? 'unknown',
+      installPath: installPath ?? '',
+      installedAt: rec.installedAt ?? new Date().toISOString(),
+      installedPaths: Array.isArray(rec.installedPaths) ? rec.installedPaths : [],
+    }
+    changed = true
+  }
+
+  if (changed) {
+    store.set('installed', installed)
+  }
+
   return store.store
 }
 
