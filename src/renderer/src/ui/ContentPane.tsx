@@ -2,11 +2,14 @@ import React, { useEffect, useMemo } from 'react'
 import type { AddonChannelKey, ManifestAddon } from '@shared/types'
 import { ReleaseNotesSection } from './ReleaseNotesSection'
 
+export type ContentView = 'configure' | 'releaseNotes' | 'about'
+
 export function ContentPane(props: {
   t: (k: any) => string
   addon: ManifestAddon | null
   selectedChannel: AddonChannelKey
   onSelectChannel: (c: AddonChannelKey) => void
+  contentView: ContentView
 }) {
   if (!props.addon) {
     return (
@@ -43,10 +46,19 @@ export function ContentPane(props: {
   const releaseNotesUrl = typeof selectedCh?.releaseNotesUrl === 'string' ? selectedCh.releaseNotesUrl : null
   const channelVersion = typeof selectedCh?.version === 'string' ? selectedCh.version : null
 
+  const about = (a as any)?.aircraft as any
+
+  const aircraftType = typeof about?.type === 'string' ? about.type.trim() : ''
+  const engineType = typeof about?.engineType === 'string' ? about.engineType.trim() : ''
+  const wingType = typeof about?.wingType === 'string' ? about.wingType.trim() : ''
+
+  const hasTechSpecs = !!(aircraftType || engineType || wingType)
+
   return (
     <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden px-8 pt-5 pb-8 bg-bg-800">
-      <div className="mt-0">
-        <div className="text-sm text-text-400">{props.t('content.chooseVersion')}</div>
+      {props.contentView === 'configure' ? (
+        <div>
+          <div className="text-sm text-text-400">{props.t('content.chooseVersion')}</div>
 
           {availableChannels.length ? (
             <div className="mt-3 flex gap-4 items-stretch justify-start">
@@ -74,6 +86,15 @@ export function ContentPane(props: {
             <div className="mt-3 text-sm text-text-400">—</div>
           )}
 
+        <div className="mt-6">
+          <div className="text-sm text-text-400">{props.t('content.description')}</div>
+          <div className="mt-2 rounded-xl border border-border bg-bg-700 p-4 text-sm text-text-200 whitespace-pre-wrap">
+            {a.description}
+          </div>
+        </div>
+      </div>
+      ) : props.contentView === 'releaseNotes' ? (
+        <div>
           <ReleaseNotesSection
             t={props.t}
             addonId={a.id}
@@ -82,13 +103,32 @@ export function ContentPane(props: {
             releaseNotesUrl={releaseNotesUrl}
           />
         </div>
+      ) : (
+        <div>
+          <div className="text-lg font-semibold">{props.t('about.title')}</div>
+          <div className="mt-2 text-sm text-text-400">{props.t('about.description')}</div>
 
-      <div className="mt-6">
-        <div className="text-sm text-text-400">{props.t('content.description')}</div>
-        <div className="mt-2 rounded-xl border border-border bg-bg-700 p-4 text-sm text-text-200 whitespace-pre-wrap">
-          {a.description}
+          {hasTechSpecs ? (
+            <div className="mt-5">
+              <div className="text-sm text-text-400">{props.t('about.techSpecs')}</div>
+              <div className="mt-2 rounded-xl border border-border bg-bg-700 p-4">
+                {aircraftType ? <SpecRow label={props.t('about.aircraftType')} value={aircraftType} /> : null}
+                {engineType ? <SpecRow label={props.t('about.engineType')} value={engineType} /> : null}
+                {wingType ? <SpecRow label={props.t('about.wingType')} value={wingType} /> : null}
+              </div>
+            </div>
+          ) : null}
         </div>
-      </div>
+      )}
+    </div>
+  )
+}
+
+function SpecRow(props: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2 border-b border-border last:border-b-0">
+      <div className="text-[11px] text-text-400">{props.label}</div>
+      <div className="text-sm text-text-200 text-right">{props.value}</div>
     </div>
   )
 }

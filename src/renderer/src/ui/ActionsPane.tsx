@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import type { AddonChannelKey, InstalledAddonRecord, ManifestAddon } from '@shared/types'
+import { FileText, Info, Settings2 } from 'lucide-react'
+
+export type ContentView = 'configure' | 'releaseNotes' | 'about'
 
 export type InstallDecision = {
   canInstall: boolean
@@ -11,6 +14,10 @@ export type InstallDecision = {
 export function ActionsPane(props: {
   t: (k: any) => string
   addon: ManifestAddon | null
+
+  contentView: ContentView
+  onChangeView: (v: ContentView) => void
+
   selectedChannel: AddonChannelKey
   installed: InstalledAddonRecord | undefined
   installPathSet: boolean
@@ -63,23 +70,48 @@ export function ActionsPane(props: {
     }
   }, [props.addon, props.selectedChannel, props.installed])
 
+  const NavButton = (p: { view: ContentView; label: string; icon: React.ReactNode }) => {
+    const active = props.contentView === p.view
+    return (
+      <button
+        onClick={() => props.onChangeView(p.view)}
+        className={
+          `dsfc-no-drag w-full px-3 py-2 rounded-xl border text-sm flex items-center gap-2 transition ` +
+          (active ? 'border-accent bg-accent/10 text-text-100' : 'border-border bg-bg-900 text-text-200 hover:bg-bg-800')
+        }
+        style={{ WebkitAppRegion: 'no-drag' as any }}
+      >
+        <span className={active ? 'text-accent' : 'text-text-400'}>{p.icon}</span>
+        <span className="font-semibold">{p.label}</span>
+      </button>
+    )
+  }
+
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-bg-800 border-l border-border">
-      {/* MAIN AREA: logs only */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-5">
-        <div className="text-xs text-text-400">{props.t('actions.title')}</div>
+      {/* Top nav */}
+      <div className="flex-shrink-0 px-5 pt-5">
+        <div className="flex flex-col gap-2">
+          <NavButton view="configure" label={props.t('actions.configure')} icon={<Settings2 size={18} />} />
+          <NavButton view="releaseNotes" label={props.t('actions.releaseNotes')} icon={<FileText size={18} />} />
+          <NavButton view="about" label={props.t('actions.about')} icon={<Info size={18} />} />
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0" />
+
+      {/* Bottom pinned: logs + install/update/uninstall always visible */}
+      <div className="flex-shrink-0 px-5 pb-5 pt-4 border-t border-white/10">
         <button
-          className="mt-3 w-full px-3 py-2 rounded-xl border border-accent2/40 bg-accent2/20 hover:bg-accent2/30 text-sm text-left transition text-text-200"
+          className="w-full px-3 py-2 rounded-xl border border-accent2/40 bg-accent2/20 hover:bg-accent2/30 text-sm text-left transition text-text-200"
           onClick={() => setShowLogs(true)}
+          style={{ WebkitAppRegion: 'no-drag' as any }}
         >
           {props.t('actions.logs')}
         </button>
-      </div>
 
-      {/* BOTTOM PINNED: install/update/uninstall always visible */}
-      <div className="flex-shrink-0 px-5 pb-5 pt-4 border-t border-white/10">
         {props.addon ? (
-          <div>
+          <div className="mt-3">
             {props.progress ? (
               <div className="mb-3">
                 <div className="flex items-center justify-between">

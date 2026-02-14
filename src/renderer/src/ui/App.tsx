@@ -14,6 +14,8 @@ import { createT, mapLocaleToLang, type SupportedLang } from '../i18n'
 
 type Category = { id: string; name: string }
 
+type ContentView = 'configure' | 'releaseNotes' | 'about'
+
 export function App() {
   const [state, setState] = useState<LocalState | null>(null)
   const [manifest, setManifest] = useState<RemoteManifest | null>(null)
@@ -45,6 +47,7 @@ export function App() {
   const [appIsPackaged, setAppIsPackaged] = useState<boolean | null>(null)
 
   const [channel, setChannel] = useState<AddonChannelKey>('stable')
+  const [contentView, setContentView] = useState<ContentView>('configure')
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<'install' | 'update'>('install')
@@ -144,6 +147,12 @@ export function App() {
     () => addons.find((a) => a.id === selectedAddonId) ?? addons[0] ?? null,
     [addons, selectedAddonId]
   )
+
+  // Reset middle pane when addon selection changes.
+  useEffect(() => {
+    if (!selectedAddonId) return
+    setContentView('configure')
+  }, [selectedAddonId])
 
   useEffect(() => {
     if (!selectedAddon) return
@@ -332,13 +341,21 @@ export function App() {
         </div>
 
         <div className="h-full min-h-0 min-w-0 overflow-hidden col-start-3 row-start-2">
-          <ContentPane addon={selectedAddon} selectedChannel={channel} onSelectChannel={setChannel} t={t} />
+          <ContentPane
+            addon={selectedAddon}
+            selectedChannel={channel}
+            onSelectChannel={setChannel}
+            contentView={contentView}
+            t={t}
+          />
         </div>
 
         <div className="h-full min-h-0 min-w-0 overflow-hidden col-start-4 row-start-2">
           <ActionsPane
             addon={selectedAddon}
             t={t}
+            contentView={contentView}
+            onChangeView={setContentView}
             selectedChannel={channel}
             installed={installedRec}
             installPathSet={!!(state?.settings.installPath ?? state?.settings.communityPath)}

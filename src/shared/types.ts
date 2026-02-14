@@ -28,6 +28,14 @@ export interface ManifestAddon {
   categoryId: string
   bannerUrl?: string
   screenshotUrl?: string
+
+  /** Optional metadata for About view (all fields optional). */
+  aircraft?: {
+    type?: string
+    engineType?: string
+    wingType?: string
+  }
+
   // One addon can install one-or-more folders into the Community directory.
   // If omitted, installer will infer from extracted top-level folders.
   packageFolderNames?: string[]

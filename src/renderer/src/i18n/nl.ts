@@ -33,6 +33,14 @@ export const nl = {
   'actions.about': 'Over',
   'actions.logs': 'Logs',
 
+  // Over (addon)
+  'about.title': 'Over',
+  'about.description': 'DFSC Installer helpt je MSFS Community-addons te installeren en beheren vanuit één centrale bron.',
+  'about.techSpecs': 'Technische specs',
+  'about.aircraftType': 'Vliegtuigtype',
+  'about.engineType': 'Motortype',
+  'about.wingType': 'Vleugeltype',
+
   // App updates
   'updates.title': 'App-updates',
   'updates.check': 'Controleren op updates',

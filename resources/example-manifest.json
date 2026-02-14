@@ -11,6 +11,11 @@
       "description": "Dutch Flight Sim Community livery for the A320.",
       "categoryId": "liveries",
       "bannerUrl": "https://nas.example.com/addons/assets/a320-dsfc-banner.jpg",
+      "aircraft": {
+        "type": "Airbus A320neo",
+        "engineType": "CFM LEAP-1A",
+        "wingType": "Sharklets"
+      },
       "packageFolderNames": ["dsfc-livery-a320-dutch"],
       "allowRawInstall": true,
       "channels": {

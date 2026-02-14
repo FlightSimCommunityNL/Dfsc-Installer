@@ -33,6 +33,14 @@ export const en = {
   'actions.about': 'About',
   'actions.logs': 'Logs',
 
+  // About (addon)
+  'about.title': 'About',
+  'about.description': 'DFSC Installer helps you install and manage MSFS Community addons from a central source.',
+  'about.techSpecs': 'Tech Specs',
+  'about.aircraftType': 'Aircraft type',
+  'about.engineType': 'Engine type',
+  'about.wingType': 'Wing type',
+
   // App updates
   'updates.title': 'App Updates',
   'updates.check': 'Check for updates',
