@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import dfscLogo from '../assets/dfsc-logo.png'
 import { MACOS_TRAFFIC_INSET_X, TITLEBAR_HEIGHT } from '@shared/windowChrome'
+import { APP_DISPLAY_NAME } from '@shared/app-info'
 
 type UpdateUiState =
   | { kind: 'hidden' }
@@ -62,8 +63,11 @@ export function TitleBar(props: { title?: string; offline?: boolean; version?: s
           draggable={false}
           style={{ WebkitAppRegion: 'no-drag' as any }}
         />
-        <div className="text-sm font-semibold text-text-100 dsfc-no-drag truncate" style={{ WebkitAppRegion: 'no-drag' as any }}>
-          {props.title ?? 'Dfsc Installer'}
+        <div
+          className="text-sm font-semibold text-text-100 dsfc-no-drag truncate whitespace-nowrap"
+          style={{ WebkitAppRegion: 'no-drag' as any }}
+        >
+          {props.title ?? APP_DISPLAY_NAME}
         </div>
       </div>
 

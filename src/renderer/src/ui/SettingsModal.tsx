@@ -1,4 +1,28 @@
 import React from 'react'
+import { RefreshCw, FolderSearch, FolderOpen, Download } from 'lucide-react'
+
+function SectionCard(props: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-border bg-bg-900/60 p-3">
+      <div className="text-[11px] uppercase tracking-wide text-text-400 mb-2">{props.title}</div>
+      {props.children}
+    </section>
+  )
+}
+
+function ReadonlyPath(props: { value: string | null; fallback: string }) {
+  return (
+    <div
+      className="w-full bg-bg-800 border border-border rounded-xl px-3 py-1.5 text-sm text-text-200 truncate"
+      title={props.value ?? ''}
+    >
+      {props.value ?? props.fallback}
+    </div>
+  )
+}
+
+const buttonBase =
+  'h-8 px-3 rounded-xl border border-border bg-bg-800 text-sm text-text-100 hover:bg-bg-700 inline-flex items-center gap-2'
 
 export function SettingsModal(props: {
   open: boolean
@@ -40,163 +64,182 @@ export function SettingsModal(props: {
 }) {
   if (!props.open) return null
 
+  const isUpdateBusy = props.updateState.status === 'checking' || props.updateState.status === 'progress'
+  const updateButtonLabel =
+    props.updateState.status === 'checking'
+      ? props.t('settings.updates.checking')
+      : props.updateState.status === 'progress'
+        ? `${props.t('settings.updates.downloading')} ${(props.updateState.percent ?? 0).toFixed(0)}%`
+        : props.updateState.status === 'available' || props.updateState.status === 'downloaded'
+          ? props.t('settings.updates.install')
+          : props.t('settings.updates.check')
+
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/60" onClick={props.onClose} />
-      <div className="absolute left-1/2 top-1/2 w-[780px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-bg-900 overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold">{props.t('settings.title')}</div>
-            <div className="text-xs text-text-400 mt-1">{props.t('settings.subtitle')}</div>
-          </div>
-          <button onClick={props.onClose} className="text-text-400 hover:text-text-100">{props.t('common.close')}</button>
+
+      <div className="absolute left-1/2 top-1/2 w-[820px] max-w-[calc(100vw-32px)] max-h-[calc(100vh-24px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-border bg-bg-900 overflow-hidden flex flex-col">
+        {/* Header (fixed) */}
+        <div className="flex-shrink-0 px-4 py-3 border-b border-border flex items-center justify-between">
+          <div className="text-sm font-semibold">{props.t('settings.title')}</div>
+          <button onClick={props.onClose} className="text-text-400 hover:text-text-100">
+            {props.t('common.close')}
+          </button>
         </div>
 
-        <div className="p-4 grid grid-cols-12 gap-3">
-          <div className="col-span-12">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.communityFolder')}</div>
-            <div className="flex items-center gap-2">
-              <div
-                className="flex-1 bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate"
-                title={props.communityPath ?? ''}
-              >
-                {props.communityPath ?? props.t('common.notSet')}
-              </div>
-              <button
-                onClick={props.onAutoDetectCommunity}
-                className="px-3 py-2 rounded-md border border-border bg-bg-800 text-sm hover:bg-bg-700"
-              >
-                {props.t('settings.autoDetect')}
-              </button>
-              <button
-                onClick={props.onBrowseCommunity}
-                className="px-3 py-2 rounded-md border border-border bg-bg-800 text-sm hover:bg-bg-700"
-              >
-                {props.t('settings.browse')}
-              </button>
+        {/* Body (scrollable) */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+          <div className="grid grid-cols-12 gap-3">
+            {/* 1) MSFS Community-map */}
+            <div className="col-span-12">
+              <SectionCard title={props.t('settings.communityFolder')}>
+                <div className="flex flex-col gap-2">
+                  <ReadonlyPath value={props.communityPath} fallback={props.t('common.notSet')} />
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={props.onAutoDetectCommunity} className={buttonBase}>
+                      <FolderSearch size={15} className="text-text-300" />
+                      {props.t('settings.autoDetect')}
+                    </button>
+                    <button onClick={props.onBrowseCommunity} className={buttonBase}>
+                      <FolderOpen size={15} className="text-text-300" />
+                      {props.t('settings.browse')}
+                    </button>
+                  </div>
+                  {props.autoDetectResult ? (
+                    <div className="text-xs text-text-400">{props.autoDetectResult}</div>
+                  ) : null}
+                </div>
+              </SectionCard>
             </div>
-            {props.autoDetectResult ? (
-              <div className="mt-2 text-xs text-text-400">{props.autoDetectResult}</div>
-            ) : null}
-          </div>
 
-          <div className="col-span-12">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.installPath')}</div>
-            <div className="flex items-center gap-2">
-              <div
-                className="flex-1 bg-bg-800 border border-border rounded-md px-3 py-2 text-sm text-text-200 truncate"
-                title={props.installPath ?? ''}
-              >
-                {props.installPath ?? props.t('common.notSet')}
-              </div>
-              <button
-                onClick={props.onBrowseInstallPath}
-                className="px-3 py-2 rounded-md border border-border bg-bg-800 text-sm hover:bg-bg-700"
-              >
-                {props.t('settings.browse')}
-              </button>
-              <button
-                onClick={props.onUseCommunityForInstallPath}
-                disabled={!props.communityPath}
-                className={
-                  `px-3 py-2 rounded-md border border-border bg-bg-800 text-sm hover:bg-bg-700 ` +
-                  (!props.communityPath ? 'opacity-50 cursor-not-allowed' : '')
-                }
-              >
-                {props.t('settings.useCommunityFolder')}
-              </button>
+            {/* 2) Installatiepad */}
+            <div className="col-span-12">
+              <SectionCard title={props.t('settings.installPath')}>
+                <div className="flex flex-col gap-2">
+                  <ReadonlyPath value={props.installPath} fallback={props.t('common.notSet')} />
+
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={props.onBrowseInstallPath} className={buttonBase}>
+                      <FolderOpen size={15} className="text-text-300" />
+                      {props.t('settings.browse')}
+                    </button>
+                    <button
+                      onClick={props.onUseCommunityForInstallPath}
+                      disabled={!props.communityPath}
+                      className={buttonBase + (!props.communityPath ? ' opacity-50 cursor-not-allowed' : '')}
+                    >
+                      {props.t('settings.useCommunityFolder')}
+                    </button>
+                  </div>
+
+                  {props.installPathResult ? (
+                    <div className="text-xs text-text-400">{props.installPathResult}</div>
+                  ) : null}
+                </div>
+              </SectionCard>
             </div>
-            {props.installPathMode === 'custom' ? (
-              <div className="mt-2 text-xs text-text-400">{props.installPathResult ?? ''}</div>
-            ) : props.installPathResult ? (
-              <div className="mt-2 text-xs text-text-400">{props.installPathResult}</div>
-            ) : null}
-          </div>
 
-          <label className="col-span-12">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.language')}</div>
-            <select
-              value={props.languageMode}
-              onChange={(e) => props.setLanguageMode(e.target.value as any)}
-              className="w-full bg-bg-800 border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent"
-            >
-              <option value="system">{props.t('settings.language.system')}</option>
-              <option value="en">{props.t('settings.language.en')}</option>
-              <option value="nl">{props.t('settings.language.nl')}</option>
-            </select>
-          </label>
+            {/* 3) Taal */}
+            <div className="col-span-12">
+              <SectionCard title={props.t('settings.language')}>
+                <select
+                  value={props.languageMode}
+                  onChange={(e) => props.setLanguageMode(e.target.value as any)}
+                  className="w-full h-9 bg-bg-800 border border-border rounded-xl px-3 text-sm outline-none focus:border-accent"
+                >
+                  <option value="system">{props.t('settings.language.system')}</option>
+                  <option value="en">{props.t('settings.language.en')}</option>
+                  <option value="nl">{props.t('settings.language.nl')}</option>
+                </select>
+              </SectionCard>
+            </div>
 
-          {/* App updates */}
-          <div className="col-span-12 mt-2">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.updates.title')}</div>
-            <div className="rounded-xl border border-border bg-bg-800 px-3 py-3">
-              <button
-                disabled={props.updateState.status === 'checking' || props.updateState.status === 'progress'}
-                onClick={() => {
-                  if (props.updateState.status === 'available' || props.updateState.status === 'downloaded') {
-                    void props.onInstallUpdate()
-                    return
-                  }
-                  void props.onCheckUpdates()
-                }}
-                className={
-                  `w-full px-4 py-2 rounded-xl text-sm font-semibold transition ` +
-                  (props.updateState.status === 'checking' || props.updateState.status === 'progress'
-                    ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
-                    : 'bg-accent text-black hover:brightness-110')
-                }
-              >
-                {props.updateState.status === 'checking'
-                  ? props.t('settings.updates.checking')
-                  : props.updateState.status === 'progress'
-                    ? `${props.t('settings.updates.downloading')} ${(props.updateState.percent ?? 0).toFixed(0)}%`
-                    : props.updateState.status === 'available' || props.updateState.status === 'downloaded'
-                      ? props.t('settings.updates.install')
-                      : props.t('settings.updates.check')}
-              </button>
+            {/* 4) App-updates */}
+            <div className="col-span-12">
+              <SectionCard title={props.t('settings.updates.title')}>
+                <div className="flex flex-col gap-3">
+                  <button
+                    disabled={isUpdateBusy}
+                    onClick={() => {
+                      if (props.updateState.status === 'available' || props.updateState.status === 'downloaded') {
+                        void props.onInstallUpdate()
+                        return
+                      }
+                      void props.onCheckUpdates()
+                    }}
+                    className={
+                      `w-full h-9 px-4 rounded-xl text-sm font-semibold transition inline-flex items-center justify-center gap-2 ` +
+                      (isUpdateBusy
+                        ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
+                        : 'bg-accent text-black hover:brightness-110')
+                    }
+                  >
+                    {props.updateState.status === 'available' || props.updateState.status === 'downloaded' ? (
+                      <Download size={15} />
+                    ) : (
+                      <RefreshCw size={15} />
+                    )}
+                    {updateButtonLabel}
+                  </button>
 
-              {props.updateState.status === 'progress' ? (
-                <div className="mt-3">
-                  <div className="h-2 bg-bg-900 rounded overflow-hidden">
-                    <div className="h-2 bg-accent" style={{ width: `${props.updateState.percent}%` }} />
+                  <div className="text-xs text-text-400">{props.t('settings.updates.helper')}</div>
+
+                  {props.updateState.status === 'progress' ? (
+                    <div>
+                      <div className="h-2 bg-bg-900 rounded overflow-hidden">
+                        <div className="h-2 bg-accent" style={{ width: `${props.updateState.percent}%` }} />
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="text-[11px] text-text-400">
+                    {props.updateState.status === 'not-available'
+                      ? props.t('settings.updates.uptodate')
+                      : props.updateState.status === 'available'
+                        ? `${props.t('settings.updates.available')} v${props.updateState.version}`
+                        : props.updateState.status === 'downloaded'
+                          ? props.t('settings.updates.ready')
+                          : props.updateState.status === 'progress'
+                            ? `${props.t('settings.updates.downloading')} ${(props.updateState.percent ?? 0).toFixed(0)}%`
+                            : props.updateState.status === 'error'
+                              ? `${props.t('settings.updates.error')}: ${props.updateState.message}`
+                              : ''}
                   </div>
                 </div>
-              ) : null}
-
-              <div className="mt-3 text-[11px] text-text-400">
-                {props.updateState.status === 'not-available'
-                  ? props.t('settings.updates.uptodate')
-                  : props.updateState.status === 'available'
-                    ? `${props.t('settings.updates.available')} v${props.updateState.version}`
-                    : props.updateState.status === 'downloaded'
-                      ? props.t('settings.updates.ready')
-                      : props.updateState.status === 'progress'
-                        ? `${props.t('settings.updates.downloading')} ${(props.updateState.percent ?? 0).toFixed(0)}%`
-                        : props.updateState.status === 'error'
-                          ? `${props.t('settings.updates.error')}: ${props.updateState.message}`
-                          : ''}
-              </div>
+              </SectionCard>
             </div>
-          </div>
 
-          {/* About / app version */}
-          <div className="col-span-12 mt-2">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.aboutTitle')}</div>
-            <div className="rounded-xl border border-border bg-bg-800 px-3 py-3">
-              <div className="text-[11px] text-text-400">{props.t('settings.installedVersion')}</div>
-              <div className="mt-1 text-sm font-semibold text-text-100">
-                {props.appVersion ? `v${props.appVersion}` : '—'}
-                {props.appIsPackaged === false ? ` (${props.t('settings.channel.dev')})` : props.appIsPackaged === true ? ` (${props.t('settings.channel.release')})` : ''}
-              </div>
+            {/* 5) Over */}
+            <div className="col-span-12">
+              <SectionCard title={props.t('settings.aboutTitle')}>
+                <div className="rounded-xl border border-border bg-bg-800 px-3 py-2">
+                  <div className="text-[11px] text-text-400">{props.t('settings.installedVersion')}</div>
+                  <div className="mt-1 text-sm font-semibold text-text-100">
+                    {props.appVersion ? `v${props.appVersion}` : '—'}
+                    {props.appIsPackaged === false
+                      ? ` (${props.t('settings.channel.dev')})`
+                      : props.appIsPackaged === true
+                        ? ` (${props.t('settings.channel.release')})`
+                        : ''}
+                  </div>
+                </div>
+              </SectionCard>
             </div>
           </div>
         </div>
 
-        <div className="p-4 border-t border-border flex gap-2 justify-end">
-          <button onClick={props.onClose} className="px-4 py-2 rounded-xl border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30">
+        {/* Footer (fixed) */}
+        <div className="flex-shrink-0 px-4 py-3 border-t border-border flex gap-2 justify-end bg-bg-900">
+          <button
+            onClick={props.onClose}
+            className="h-9 px-4 rounded-xl border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30"
+          >
             {props.t('common.cancel')}
           </button>
-          <button onClick={props.onSave} className="px-4 py-2 rounded-xl bg-accent text-black text-sm font-semibold hover:brightness-110">
+          <button
+            onClick={props.onSave}
+            className="h-9 px-4 rounded-xl bg-accent text-black text-sm font-semibold hover:brightness-110"
+          >
             {props.t('common.save')}
           </button>
         </div>

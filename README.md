@@ -1,5 +1,5 @@
 # Dutch Flight Sim Community Installer
-Short name: **Dsfc Installer**  
+Short name: **DutchFlightSimCommunity Installer**  
 Author: **Grazzy_Duck / Bas**
 
 Windows-only Electron desktop installer/manager for Microsoft Flight Simulator 2024 Community addons hosted on a NAS/VPS via HTTPS.
@@ -113,6 +113,6 @@ Dev mode note:
 - `npm run dev` never blocks on updates; update checks are skipped when the app is not packaged.
 
 ## App metadata
-- productName: `DFSC Installer`
+- productName: `DutchFlightSimCommunity Installer`
 - appId: `nl.flightsimcommunity.dfsc.installer`
 - author: `Grazzy_Duck / Bas`

@@ -10,6 +10,7 @@ import { SettingsModal } from './SettingsModal'
 import { InstallConfirmModal } from './InstallConfirmModal'
 import { CommunityPathRequiredModal } from './CommunityPathRequiredModal'
 import { TitleBar } from './TitleBar'
+import { APP_DISPLAY_NAME } from '@shared/app-info'
 import { createT, mapLocaleToLang, type SupportedLang } from '../i18n'
 
 type Category = { id: string; name: string }
@@ -304,7 +305,7 @@ export function App() {
 
   return (
     <div className="h-full w-full bg-bg-800 text-text-100 overflow-hidden grid grid-rows-[auto_1fr]">
-      <TitleBar title="Dfsc Installer" offline={offlineMode} version={appVersion} />
+      <TitleBar title={APP_DISPLAY_NAME} offline={offlineMode} version={appVersion} />
 
       <div className="h-full min-h-0 min-w-0 grid grid-cols-[76px_340px_1fr_240px] grid-rows-[auto_1fr] overflow-hidden">
         <div className="h-full min-h-0 min-w-0 overflow-hidden row-span-2 col-start-1">

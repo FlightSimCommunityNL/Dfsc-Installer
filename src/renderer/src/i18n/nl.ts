@@ -34,7 +34,7 @@ export const nl = {
 
   // Over (addon)
   'about.title': 'Over',
-  'about.description': 'DFSC Installer helpt je MSFS Community-addons te installeren en beheren vanuit één centrale bron.',
+  'about.description': 'DutchFlightSimCommunity Installer helpt je MSFS Community-addons te installeren en beheren vanuit één centrale bron.',
   'about.techSpecs': 'Technische specs',
   'about.aircraftType': 'Vliegtuigtype',
   'about.engineType': 'Motortype',
@@ -120,6 +120,7 @@ export const nl = {
   'settings.updates.available': 'Update beschikbaar:',
   'settings.updates.ready': 'Gedownload. Klaar om te installeren.',
   'settings.updates.error': 'Updatecontrole mislukt',
+  'settings.updates.helper': 'Controleert of er een nieuwere versie beschikbaar is.',
 
   // Instellingen: over
   'settings.aboutTitle': 'Over',

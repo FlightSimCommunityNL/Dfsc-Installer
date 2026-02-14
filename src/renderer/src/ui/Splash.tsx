@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import dfscLogo from '../assets/dfsc-logo.png'
+import { APP_DISPLAY_NAME } from '@shared/app-info'
 
 type SplashStatus = {
   phase:
@@ -78,7 +79,8 @@ export function Splash() {
     <div className="h-full w-full bg-[#101828] text-text-100 flex items-center justify-center">
       <div className="w-[420px] text-center">
         <img src={dfscLogo} className="h-16 w-auto mx-auto" alt="DFSC" draggable={false} />
-        <div className="mt-4 text-sm font-semibold">{progressText ?? status.message}</div>
+        <div className="mt-3 text-sm font-semibold whitespace-nowrap">{APP_DISPLAY_NAME}</div>
+        <div className="mt-3 text-sm font-semibold">{progressText ?? status.message}</div>
 
         <div className="mt-5 h-2 bg-bg-900/60 rounded-full overflow-hidden">
           <div

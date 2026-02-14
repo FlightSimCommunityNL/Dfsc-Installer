@@ -34,7 +34,7 @@ export const en = {
 
   // About (addon)
   'about.title': 'About',
-  'about.description': 'DFSC Installer helps you install and manage MSFS Community addons from a central source.',
+  'about.description': 'DutchFlightSimCommunity Installer helps you install and manage MSFS Community addons from a central source.',
   'about.techSpecs': 'Tech Specs',
   'about.aircraftType': 'Aircraft type',
   'about.engineType': 'Engine type',
@@ -120,6 +120,7 @@ export const en = {
   'settings.updates.available': 'Update available:',
   'settings.updates.ready': 'Downloaded. Ready to install.',
   'settings.updates.error': 'Update check failed',
+  'settings.updates.helper': 'Checks whether a newer version is available.',
 
   // Settings: about
   'settings.aboutTitle': 'About',

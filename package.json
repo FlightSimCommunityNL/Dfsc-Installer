@@ -1,7 +1,7 @@
 {
   "name": "dsfc-installer",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Dutch Flight Sim Community Installer (Windows-only target)",
   "author": "Grazzy_Duck / Bas",
   "main": "out/main/index.js",
@@ -46,7 +46,7 @@
     "vite": "^7.3.1"
   },
   "build": {
-    "productName": "DFSC Installer",
+    "productName": "DutchFlightSimCommunity Installer",
     "icon": "build/icon.png",
     "appId": "nl.flightsimcommunity.dfsc.installer",
     "copyright": "Copyright (c) 2026 Grazzy_Duck / Bas",
@@ -57,7 +57,7 @@
     },
     "extraMetadata": {
       "name": "dfsc-installer",
-      "productName": "DFSC Installer",
+      "productName": "DutchFlightSimCommunity Installer",
       "author": "FlightSimCommunityNL"
     },
     "files": [
@@ -90,10 +90,10 @@
       "allowToChangeInstallationDirectory": false,
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
-      "uninstallDisplayName": "DFSC Installer",
+      "uninstallDisplayName": "DutchFlightSimCommunity Installer",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "DFSC Installer"
+      "shortcutName": "DutchFlightSimCommunity Installer"
     },
     "publish": [
       {

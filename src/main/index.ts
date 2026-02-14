@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import { join } from 'path'
 import path from 'path'
 import { MACOS_TRAFFIC_LIGHT_POS } from '@shared/windowChrome'
+import { APP_DISPLAY_NAME } from '@shared/app-info'
 import { registerIpc } from './ipc'
 import { initUpdateManager, setUpdateHandoffHandlers, startBackgroundUpdatePolling } from './updater'
 import updater from 'electron-updater'
@@ -59,7 +60,7 @@ function createWindow(opts?: { autoShow?: boolean }): BrowserWindow {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#0b0f14',
-    title: 'Dfsc Installer',
+    title: APP_DISPLAY_NAME,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
