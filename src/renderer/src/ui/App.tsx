@@ -35,11 +35,8 @@ export function App() {
   const [offlineMode, setOfflineMode] = useState(false)
 
   const [showSettings, setShowSettings] = useState(false)
-  const [msStorePkgDraft, setMsStorePkgDraft] = useState('')
   const [autoDetectResult, setAutoDetectResult] = useState<string | null>(null)
   const [installPathResult, setInstallPathResult] = useState<string | null>(null)
-  const [candidatesDraft, setCandidatesDraft] = useState('')
-  const [themeDraft, setThemeDraft] = useState<'dark'>('dark')
   const [languageModeDraft, setLanguageModeDraft] = useState<'system' | 'en' | 'nl'>('system')
 
   const [systemLocale, setSystemLocale] = useState<string | null>(null)
@@ -71,9 +68,6 @@ export function App() {
 
     window.dfsc.settings.get().then((s) => {
       setState(s)
-      setMsStorePkgDraft(s.settings.windowsMsStorePackageFamilyName ?? '')
-      setCandidatesDraft((s.settings.windowsCommunityCandidates ?? []).join('\n'))
-      setThemeDraft((s.settings.theme ?? 'dark') as 'dark')
       setLanguageModeDraft((s.settings.languageMode ?? 'system') as 'system' | 'en' | 'nl')
     })
 
@@ -223,15 +217,7 @@ export function App() {
   }
 
   const onSaveSettings = async () => {
-    const candidates = candidatesDraft
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean)
-
     await window.dfsc.settings.set({
-      windowsMsStorePackageFamilyName: msStorePkgDraft.trim() || undefined,
-      windowsCommunityCandidates: candidates,
-      theme: themeDraft,
       languageMode: languageModeDraft,
     })
 
@@ -289,14 +275,6 @@ export function App() {
     }
   }
 
-  const onTestInstallPath = async () => {
-    try {
-      await window.dfsc.installPath.test()
-      setInstallPathResult(t('settings.installPath.test.ok'))
-    } catch (e: any) {
-      setInstallPathResult(t('settings.installPath.test.fail'))
-    }
-  }
 
   const onAutoDetectCommunity = async () => {
     try {
@@ -315,14 +293,6 @@ export function App() {
     }
   }
 
-  const onTestCommunity = async () => {
-    try {
-      await window.dfsc.community.test()
-      setLogLines((prev) => [...prev, `[community] ${t('settings.testPath.ok')}`])
-    } catch (e: any) {
-      setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
-    }
-  }
 
   const currentProgress = selectedAddon ? installProgress[selectedAddon.id] : undefined
 
@@ -416,16 +386,8 @@ export function App() {
         installPathResult={installPathResult}
         onBrowseCommunity={onBrowseCommunity}
         onAutoDetectCommunity={onAutoDetectCommunity}
-        onTestCommunity={onTestCommunity}
         onBrowseInstallPath={onBrowseInstallPath}
         onUseCommunityForInstallPath={onUseCommunityForInstallPath}
-        onTestInstallPath={onTestInstallPath}
-        msStorePackageFamilyName={msStorePkgDraft}
-        setMsStorePackageFamilyName={setMsStorePkgDraft}
-        candidates={candidatesDraft}
-        setCandidates={setCandidatesDraft}
-        theme={themeDraft}
-        setTheme={setThemeDraft}
         languageMode={languageModeDraft}
         setLanguageMode={setLanguageModeDraft}
         onSave={onSaveSettings}

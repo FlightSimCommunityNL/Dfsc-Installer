@@ -17,19 +17,10 @@ export function SettingsModal(props: {
 
   onBrowseCommunity: () => void
   onAutoDetectCommunity: () => void
-  onTestCommunity: () => void
 
   onBrowseInstallPath: () => void
   onUseCommunityForInstallPath: () => void
-  onTestInstallPath: () => void
 
-  msStorePackageFamilyName: string
-  setMsStorePackageFamilyName: (v: string) => void
-  candidates: string
-  setCandidates: (v: string) => void
-
-  theme: 'dark'
-  setTheme: (v: 'dark') => void
   languageMode: 'system' | 'en' | 'nl'
   setLanguageMode: (v: 'system' | 'en' | 'nl') => void
 
@@ -71,12 +62,6 @@ export function SettingsModal(props: {
               >
                 {props.t('settings.browse')}
               </button>
-              <button
-                onClick={props.onTestCommunity}
-                className="px-3 py-2 rounded-md border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30"
-              >
-                {props.t('settings.testPath')}
-              </button>
             </div>
             {props.autoDetectResult ? (
               <div className="mt-2 text-xs text-text-400">{props.autoDetectResult}</div>
@@ -108,12 +93,6 @@ export function SettingsModal(props: {
               >
                 {props.t('settings.useCommunityFolder')}
               </button>
-              <button
-                onClick={props.onTestInstallPath}
-                className="px-3 py-2 rounded-md border border-accent2/40 bg-accent2/20 text-sm hover:bg-accent2/30"
-              >
-                {props.t('settings.installPath.test')}
-              </button>
             </div>
             {props.installPathMode === 'custom' ? (
               <div className="mt-2 text-xs text-text-400">{props.installPathResult ?? ''}</div>
@@ -122,18 +101,7 @@ export function SettingsModal(props: {
             ) : null}
           </div>
 
-          <label className="col-span-6">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.theme')}</div>
-            <select
-              value={props.theme}
-              onChange={(e) => props.setTheme(e.target.value as 'dark')}
-              className="w-full bg-bg-800 border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent"
-            >
-              <option value="dark">{props.t('settings.theme.dark')}</option>
-            </select>
-          </label>
-
-          <label className="col-span-6">
+          <label className="col-span-12">
             <div className="text-xs text-text-400 mb-1">{props.t('settings.language')}</div>
             <select
               value={props.languageMode}
@@ -144,26 +112,6 @@ export function SettingsModal(props: {
               <option value="en">{props.t('settings.language.en')}</option>
               <option value="nl">{props.t('settings.language.nl')}</option>
             </select>
-          </label>
-
-          <label className="col-span-6">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.windows.msStoreFamily')}</div>
-            <input
-              value={props.msStorePackageFamilyName}
-              onChange={(e) => props.setMsStorePackageFamilyName(e.target.value)}
-              className="w-full bg-bg-800 border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent"
-              placeholder="Microsoft.FlightSimulator_8wekyb3d8bbwe"
-            />
-          </label>
-
-          <label className="col-span-6">
-            <div className="text-xs text-text-400 mb-1">{props.t('settings.windows.extraCandidates')}</div>
-            <textarea
-              value={props.candidates}
-              onChange={(e) => props.setCandidates(e.target.value)}
-              className="w-full bg-bg-800 border border-border rounded-md px-3 py-2 text-sm outline-none focus:border-accent h-28"
-              placeholder="D:\\MSFS\\Packages\\Community"
-            />
           </label>
 
           {/* About / app version */}
