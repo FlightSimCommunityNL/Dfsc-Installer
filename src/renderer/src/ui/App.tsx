@@ -22,7 +22,6 @@ export function App() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
   const [selectedAddonId, setSelectedAddonId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [logLines, setLogLines] = useState<string[]>([])
   const [updateState, setUpdateState] = useState<
     | { status: 'idle' }
     | { status: 'checking' }
@@ -84,7 +83,6 @@ export function App() {
       setSelectedCategoryId((prev) => (prev ? prev : m.categories[0]?.id ?? null))
     })
 
-    const off1 = window.dfsc.onLog((l) => setLogLines((prev) => [...prev.slice(-400), l]))
     const off2 = window.dfsc.onInstallProgress((evt) => {
       setInstallProgress((prev) => ({
         ...prev,
@@ -108,7 +106,6 @@ export function App() {
     window.dfsc.addon.reconcile().then(setState).catch(() => {})
 
     return () => {
-      off1()
       off2()
       offU1(); offU2(); offU3(); offU4(); offU5(); offU6()
     }
@@ -180,14 +177,14 @@ export function App() {
       setState(next)
     } catch (e: any) {
       const msg = e?.message ?? String(e)
-      setLogLines((prev) => [...prev, `[install] ERROR: ${msg}`])
+      console.error('[install] ERROR:', msg)
 
       const looksLikePackageDetectionFailure =
         typeof msg === 'string' &&
         (msg.includes('No package folders found') || msg.includes('Expected folder') || msg.includes('Detected packages:'))
 
       if (selectedAddon && !selectedAddon.allowRawInstall && looksLikePackageDetectionFailure) {
-        setLogLines((prev) => [...prev, `[install] HINT: ${t('install.rawInstallHint')}`])
+        console.warn('[install] HINT:', t('install.rawInstallHint'))
       }
     }
   }
@@ -222,7 +219,7 @@ export function App() {
       const next = await window.dfsc.settings.get()
       setState(next)
     } catch (e: any) {
-      setLogLines((prev) => [...prev, `[uninstall] ERROR: ${e?.message ?? String(e)}`])
+      console.error('[uninstall] ERROR:', e?.message ?? String(e))
     }
   }
 
@@ -255,7 +252,7 @@ export function App() {
       const next = await window.dfsc.settings.get()
       setState(next)
     } catch (e: any) {
-      setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
+      console.error('[community] ERROR:', e?.message ?? String(e))
     }
   }
 
@@ -269,7 +266,7 @@ export function App() {
       }
     } catch (e: any) {
       setInstallPathResult(t('settings.installPath.notFound'))
-      setLogLines((prev) => [...prev, `[installPath] ERROR: ${e?.message ?? String(e)}`])
+      console.error('[installPath] ERROR:', e?.message ?? String(e))
     }
   }
 
@@ -281,10 +278,9 @@ export function App() {
       const resolved = (next.settings.installPath ?? next.settings.communityPath) as string | null
       if (resolved) setInstallPathResult(`${t('settings.installPath.found')} ${resolved}`)
     } catch (e: any) {
-      setLogLines((prev) => [...prev, `[installPath] ERROR: ${e?.message ?? String(e)}`])
+      console.error('[installPath] ERROR:', e?.message ?? String(e))
     }
   }
-
 
   const onAutoDetectCommunity = async () => {
     try {
@@ -299,7 +295,7 @@ export function App() {
       }
     } catch (e: any) {
       setAutoDetectResult(t('settings.autoDetect.notFound'))
-      setLogLines((prev) => [...prev, `[community] ERROR: ${e?.message ?? String(e)}`])
+      console.error('[community] ERROR:', e?.message ?? String(e))
     }
   }
 
@@ -362,7 +358,6 @@ export function App() {
             progress={currentProgress ? { phase: currentProgress.phase, percent: currentProgress.percent } : undefined}
             onRequestInstallOrUpdate={requestInstallOrUpdate}
             onUninstall={onUninstall}
-            logs={logLines}
           />
         </div>
       </div>

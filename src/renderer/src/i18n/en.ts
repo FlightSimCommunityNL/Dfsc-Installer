@@ -31,7 +31,6 @@ export const en = {
   'actions.configure': 'Configure',
   'actions.releaseNotes': 'Release Notes',
   'actions.about': 'About',
-  'actions.logs': 'Logs',
 
   // About (addon)
   'about.title': 'About',

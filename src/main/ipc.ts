@@ -26,9 +26,6 @@ import { checkForUpdates, downloadUpdate, quitAndInstall } from './updater'
 let lastManifestUrl: string | null = null
 let lastManifest: Awaited<ReturnType<typeof fetchManifest>> | null = null
 
-function sendLog(getWin: () => BrowserWindow | null, line: string) {
-  getWin()?.webContents.send(IPC.EVT_LOG, line)
-}
 
 function sendProgress(getWin: () => BrowserWindow | null, evt: any) {
   getWin()?.webContents.send(IPC.EVT_INSTALL_PROGRESS, evt)
@@ -36,7 +33,10 @@ function sendProgress(getWin: () => BrowserWindow | null, evt: any) {
 
 export function registerIpc(getWin: () => BrowserWindow | null) {
   const installer = new AddonInstallerService(
-    (line) => sendLog(getWin, line),
+    (line) => {
+      // Logs UI removed; keep logs in main process for debugging.
+      console.log(line)
+    },
     (evt) => sendProgress(getWin, evt)
   )
 
@@ -152,7 +152,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       const entries = await fse.readdir(basePath, { withFileTypes: true })
       communityDirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
     } catch (err: any) {
-      sendLog(getWin, `[installPath] ERROR reading install folder: ${err?.message ?? String(err)}`)
+      console.warn(`[installPath] ERROR reading install folder: ${err?.message ?? String(err)}`)
       return getState()
     }
 
@@ -330,7 +330,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
 
       return getState()
     } catch (err: any) {
-      sendLog(getWin, `[${args.addonId}] ERROR: ${err?.message ?? String(err)}`)
+      console.warn(`[${args.addonId}] ERROR: ${err?.message ?? String(err)}`)
       // Let renderer still see the error via rejected promise
       throw err
     }
@@ -346,7 +346,7 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       setInstalled(args.addonId, null)
       return getState()
     } catch (err: any) {
-      sendLog(getWin, `[${args.addonId}] ERROR: ${err?.message ?? String(err)}`)
+      console.warn(`[${args.addonId}] ERROR: ${err?.message ?? String(err)}`)
       throw err
     }
   })
@@ -415,10 +415,4 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
 
   ipcMain.handle(IPC.SYSTEM_GET_APP_VERSION, getAppVersion)
   ipcMain.handle(IPC.SYSTEM_APP_VERSION_GET, getAppVersion)
-}
-
-function joinUrl(base: string, path: string): string {
-  const b = base.endsWith('/') ? base.slice(0, -1) : base
-  const p = path.startsWith('/') ? path.slice(1) : path
-  return `${b}/${p}`
 }

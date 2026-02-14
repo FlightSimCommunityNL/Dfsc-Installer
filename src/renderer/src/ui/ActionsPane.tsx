@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import type { AddonChannelKey, InstalledAddonRecord, ManifestAddon } from '@shared/types'
 import { FileText, Info, Settings2 } from 'lucide-react'
 
@@ -24,9 +24,7 @@ export function ActionsPane(props: {
   progress: { phase: string; percent?: number } | undefined
   onRequestInstallOrUpdate: (action: 'install' | 'update') => void
   onUninstall: () => Promise<void>
-  logs: string[]
 }) {
-  const [showLogs, setShowLogs] = useState(false)
 
   const decision = useMemo<InstallDecision>(() => {
     if (!props.addon) {
@@ -100,18 +98,10 @@ export function ActionsPane(props: {
 
       <div className="flex-1 min-h-0" />
 
-      {/* Bottom pinned: logs + install/update/uninstall always visible */}
+      {/* Bottom pinned: install/update/uninstall always visible */}
       <div className="flex-shrink-0 px-5 pb-5 pt-4 border-t border-white/10">
-        <button
-          className="w-full px-3 py-2 rounded-xl border border-accent2/40 bg-accent2/20 hover:bg-accent2/30 text-sm text-left transition text-text-200"
-          onClick={() => setShowLogs(true)}
-          style={{ WebkitAppRegion: 'no-drag' as any }}
-        >
-          {props.t('actions.logs')}
-        </button>
-
         {props.addon ? (
-          <div className="mt-3">
+          <div>
             {props.progress ? (
               <div className="mb-3">
                 <div className="flex items-center justify-between">
@@ -301,9 +291,6 @@ export function ActionsPane(props: {
         )}
       </div>
 
-      {showLogs ? (
-        <LogDrawer t={props.t} logs={props.logs} onClose={() => setShowLogs(false)} />
-      ) : null}
     </div>
   )
 }
@@ -314,23 +301,5 @@ function Spinner() {
       className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
       aria-hidden="true"
     />
-  )
-}
-
-
-function LogDrawer(props: { t: (k: any) => string; logs: string[]; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={props.onClose} />
-      <div className="absolute right-0 top-0 h-full w-[520px] bg-bg-900 border-l border-border flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div className="text-sm font-semibold">{props.t('actions.logs')}</div>
-          <button onClick={props.onClose} className="text-text-400 hover:text-text-100">{props.t('common.close')}</button>
-        </div>
-        <div className="flex-1 overflow-auto p-3 font-mono text-xs text-text-400 whitespace-pre-wrap">
-          {props.logs.join('\n')}
-        </div>
-      </div>
-    </div>
   )
 }

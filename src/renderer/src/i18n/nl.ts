@@ -31,7 +31,6 @@ export const nl = {
   'actions.configure': 'Configureren',
   'actions.releaseNotes': 'Release notes',
   'actions.about': 'Over',
-  'actions.logs': 'Logs',
 
   // Over (addon)
   'about.title': 'Over',

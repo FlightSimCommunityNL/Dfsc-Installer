@@ -80,11 +80,6 @@ const api = {
     ipcRenderer.on(IPC.EVT_INSTALL_PROGRESS, listener)
     return () => ipcRenderer.removeListener(IPC.EVT_INSTALL_PROGRESS, listener)
   },
-  onLog: (cb: (line: string) => void) => {
-    const listener = (_: unknown, payload: string) => cb(payload)
-    ipcRenderer.on(IPC.EVT_LOG, listener)
-    return () => ipcRenderer.removeListener(IPC.EVT_LOG, listener)
-  },
   onUpdateChecking: (cb: () => void) => {
     const listener = () => cb()
     ipcRenderer.on(IPC.UPDATE_CHECKING, listener)

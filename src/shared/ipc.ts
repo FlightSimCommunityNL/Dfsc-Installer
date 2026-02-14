@@ -49,7 +49,6 @@ export const IPC = {
   SYSTEM_APP_VERSION_GET: 'systemAppVersion:get',
 
   EVT_INSTALL_PROGRESS: 'evt:installProgress',
-  EVT_LOG: 'evt:log',
   EVT_SPLASH_STATUS: 'evt:splashStatus',
 
   SPLASH_RETRY_CONNECTIVITY: 'splash:retryConnectivity',
