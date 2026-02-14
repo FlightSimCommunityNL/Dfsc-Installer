@@ -127,7 +127,7 @@ app.whenReady().then(async () => {
 
     if (app.isPackaged) {
       try {
-        await promiseWithTimeout(runUpdateGate(), 4_500, 'update gate')
+        await promiseWithTimeout(runUpdateGate(), 10_000, 'update gate')
       } catch (err) {
         console.error('[updater error]', err)
       }
@@ -245,36 +245,30 @@ app.whenReady().then(async () => {
       autoUpdater.on('error', (err) => {
         cleanup()
         const raw = err?.message ?? String(err)
-        if (!app.isPackaged || process.env.NODE_ENV === 'development') {
-          console.warn('[updates] error:', raw)
-        }
-        const friendly = isLikelyOffline(raw)
-          ? splashLang === 'nl'
-            ? 'Geen internetverbinding'
-            : 'No internet connection'
-          : splashLang === 'nl'
-            ? 'Updatecontrole mislukt'
-            : 'Update check failed'
-        splashSend({ phase: 'error', message: friendly })
-        // fail open
-        setTimeout(() => resolve(true), 600)
+        console.warn('[updates] error:', raw)
+        if (err?.stack) console.warn('[updates] error.stack:', err.stack)
+
+        // Always fail-open with a non-scary message.
+        const friendly = splashLang === 'nl'
+          ? 'Updatecontrole mislukt (offline of niet beschikbaar). Starten…'
+          : 'Update check failed (offline or unavailable). Starting…'
+
+        splashSend({ phase: 'checking', message: friendly })
+        setTimeout(() => resolve(true), 1200)
       })
 
       autoUpdater.checkForUpdates().catch((e: any) => {
         cleanup()
         const raw = e?.message ?? String(e)
-        if (!app.isPackaged || process.env.NODE_ENV === 'development') {
-          console.warn('[updates] checkForUpdates failed:', raw)
-        }
-        const friendly = isLikelyOffline(raw)
-          ? splashLang === 'nl'
-            ? 'Geen internetverbinding'
-            : 'No internet connection'
-          : splashLang === 'nl'
-            ? 'Updatecontrole mislukt'
-            : 'Update check failed'
-        splashSend({ phase: 'error', message: friendly })
-        setTimeout(() => resolve(true), 600)
+        console.warn('[updates] checkForUpdates failed:', raw)
+        if (e?.stack) console.warn('[updates] checkForUpdates stack:', e.stack)
+
+        const friendly = splashLang === 'nl'
+          ? 'Updatecontrole mislukt (offline of niet beschikbaar). Starten…'
+          : 'Update check failed (offline or unavailable). Starting…'
+
+        splashSend({ phase: 'checking', message: friendly })
+        setTimeout(() => resolve(true), 1200)
       })
     })
   }

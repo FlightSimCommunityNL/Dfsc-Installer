@@ -1,6 +1,10 @@
 export const GITHUB_RELEASES_OWNER = 'FlightSimCommunityNL'
 export const GITHUB_RELEASES_REPO = 'Dfsc-Installer'
 
+// Optional: allow pre-release updates (disabled by default).
+// Enable by setting DFSC_ALLOW_PRERELEASE_UPDATES=1 at runtime.
+export const ALLOW_PRERELEASE_UPDATES = process.env.DFSC_ALLOW_PRERELEASE_UPDATES === '1'
+
 export function getGitHubReleasesOwnerRepo() {
   return {
     owner: GITHUB_RELEASES_OWNER,

@@ -10,7 +10,7 @@ import type {
   UpdateErrorPayload,
   UpdateProgressPayload,
 } from '@shared/ipc'
-import { getGitHubReleasesOwnerRepo, getGitHubReleasePageUrl } from './update-config'
+import { ALLOW_PRERELEASE_UPDATES, getGitHubReleasesOwnerRepo, getGitHubReleasePageUrl } from './update-config'
 
 const { autoUpdater } = updater
 
@@ -34,12 +34,25 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   const { owner, repo } = getGitHubReleasesOwnerRepo()
   autoUpdater.setFeedURL({ provider: 'github', owner, repo })
 
+  // Optional: allow pre-release updates.
+  autoUpdater.allowPrerelease = !!ALLOW_PRERELEASE_UPDATES
+
+  // Optional runtime token for private repos.
+  // If repo is private, GitHub may return 404 to anonymous requests.
+  const runtimeToken = process.env.DFSC_GH_UPDATER_TOKEN
+  if (typeof runtimeToken === 'string' && runtimeToken.trim()) {
+    autoUpdater.requestHeaders = {
+      ...(autoUpdater.requestHeaders ?? {}),
+      Authorization: `token ${runtimeToken.trim()}`,
+    }
+  }
+
   // Extra diagnostic: the GitHub provider uses releases.atom for update discovery.
   const atomUrl = `https://github.com/${owner}/${repo}/releases.atom`
   ;(async () => {
     const { app } = await import('electron')
     console.log(
-      `[updates] provider=github owner=${owner} repo=${repo} url=${atomUrl} isPackaged=${app.isPackaged} version=${app.getVersion()}`
+      `[updates] provider=github owner=${owner} repo=${repo} url=${atomUrl} isPackaged=${app.isPackaged} version=${app.getVersion()} allowPrerelease=${autoUpdater.allowPrerelease} token=${runtimeToken ? 'yes' : 'no'}`
     )
   })().catch(() => {})
 
@@ -49,7 +62,7 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   })
 
   autoUpdater.on('update-available', (info) => {
-    console.log('[updates] update available', { version: info?.version })
+    console.log('[updates] update available', { version: info?.version, releaseName: (info as any)?.releaseName })
 
     // Existing "Updates" panel event
     const payload: UpdateAvailablePayload = {
@@ -89,7 +102,7 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('[updates] update ready', { version: info?.version })
+    console.log('[updates] update ready', { version: info?.version, downloadedFile: (info as any)?.downloadedFile })
 
     const payload: UpdateDownloadedPayload = { version: info.version }
     winSend(IPC.UPDATE_DOWNLOADED, payload)
@@ -101,28 +114,52 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   autoUpdater.on('error', async (err) => {
     const raw = err?.message ?? String(err)
 
+    // High-signal diagnostics for classification.
+    console.error('[updates] error.message:', raw)
+    if (err?.stack) console.error('[updates] error.stack:', err.stack)
+
+    const anyErr: any = err as any
+    const statusCode = anyErr?.statusCode ?? anyErr?.response?.statusCode ?? anyErr?.res?.statusCode
+    if (statusCode) console.error('[updates] error.statusCode:', statusCode)
+    const body = anyErr?.response?.body ?? anyErr?.responseBody ?? anyErr?.body
+    if (typeof body === 'string' && body.trim()) {
+      // Avoid dumping huge bodies.
+      console.error('[updates] error.responseBody:', body.slice(0, 800))
+    }
+
     let message = raw
+
     try {
       const { app } = await import('electron')
+      const { owner, repo } = getGitHubReleasesOwnerRepo()
+      const atomUrl = `https://github.com/${owner}/${repo}/releases.atom`
+      const hasToken = typeof process.env.DFSC_GH_UPDATER_TOKEN === 'string' && !!process.env.DFSC_GH_UPDATER_TOKEN.trim()
 
-      // Friendlier mapping for a very common case:
-      // - Wrong owner/repo OR
-      // - No releases published yet (or draft-only) OR
-      // - Repo is private/non-existent
-      const is404 = raw.includes(' 404') || raw.toLowerCase().includes('status code: 404') || raw.toLowerCase().includes('not found')
-      const mentionsAtom = raw.includes('releases.atom')
+      // Classify 404 realistically. NOTE: GitHub returns 404 for private repos too.
+      const is404 =
+        String(statusCode) === '404' ||
+        raw.includes(' 404') ||
+        raw.toLowerCase().includes('status code: 404') ||
+        raw.toLowerCase().includes('not found')
+      const mentionsAtom = raw.includes('releases.atom') || raw.includes(atomUrl)
 
       if (!app.isPackaged) {
         message = 'Updates only available in release builds.'
       } else if (is404 && mentionsAtom) {
-        message = 'Update check failed (404). No releases published yet, or repo owner/repo is misconfigured.'
+        if (!hasToken) {
+          message =
+            'Updates unavailable: repo is private/not accessible, or the owner/repo is wrong, or the latest release is draft-only. ' +
+            'Make the repo public or provide DFSC_GH_UPDATER_TOKEN.'
+        } else {
+          message = 'Update check failed (404). Owner/repo may be wrong, or releases are not published.'
+        }
       }
     } catch {
       // ignore
     }
 
     const payload: UpdateErrorPayload = { message }
-    console.error('[updates] error', payload.message)
+    console.error('[updates] error (user-facing):', payload.message)
     winSend(IPC.UPDATE_ERROR, payload)
   })
 }
@@ -135,6 +172,13 @@ export async function checkForUpdates() {
     winSend(IPC.UPDATE_ERROR, { message: 'Updates only available in release builds.' })
     return null
   }
+
+  const { owner, repo } = getGitHubReleasesOwnerRepo()
+  const atomUrl = `https://github.com/${owner}/${repo}/releases.atom`
+  console.log(`[updates] isPackaged=${app.isPackaged} version=${app.getVersion()}`)
+  console.log(`[updates] feed provider=github owner=${owner} repo=${repo}`)
+  console.log(`[updates] expected atom url=${atomUrl}`)
+
   console.log('[updates] checkForUpdates()')
   return autoUpdater.checkForUpdates()
 }
