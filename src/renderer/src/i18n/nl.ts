@@ -111,4 +111,10 @@ export const nl = {
   'settings.language.nl': 'Nederlands',
   'settings.windows.msStoreFamily': 'Windows: MS Store package family name (geavanceerd)',
   'settings.windows.extraCandidates': 'Windows: extra Community candidates (geavanceerd)',
+
+  // Instellingen: over
+  'settings.aboutTitle': 'Over',
+  'settings.installedVersion': 'Geïnstalleerde versie',
+  'settings.channel.dev': 'Dev',
+  'settings.channel.release': 'Release',
 } as const

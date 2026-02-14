@@ -44,6 +44,7 @@ export function App() {
 
   const [systemLocale, setSystemLocale] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [appIsPackaged, setAppIsPackaged] = useState<boolean | null>(null)
 
   const [channel, setChannel] = useState<AddonChannelKey>('stable')
 
@@ -59,8 +60,14 @@ export function App() {
 
     window.dfsc.system
       .getAppVersion()
-      .then((res: any) => setAppVersion(typeof res?.version === 'string' ? res.version : null))
-      .catch(() => setAppVersion(null))
+      .then((res: any) => {
+        setAppVersion(typeof res?.version === 'string' ? res.version : null)
+        setAppIsPackaged(typeof res?.isPackaged === 'boolean' ? res.isPackaged : null)
+      })
+      .catch(() => {
+        setAppVersion(null)
+        setAppIsPackaged(null)
+      })
 
     window.dfsc.settings.get().then((s) => {
       setState(s)
@@ -401,7 +408,7 @@ export function App() {
         onClose={() => setShowSettings(false)}
         t={t}
         appVersion={appVersion}
-        appChannel={import.meta.env.DEV ? 'Dev' : 'Release'}
+        appIsPackaged={appIsPackaged}
         communityPath={state?.settings.communityPath ?? null}
         installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
         installPathMode={(state?.settings.installPathMode as any) ?? 'followCommunity'}

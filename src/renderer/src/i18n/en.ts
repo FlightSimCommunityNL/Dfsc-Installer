@@ -111,6 +111,12 @@ export const en = {
   'settings.language.nl': 'Nederlands',
   'settings.windows.msStoreFamily': 'Windows: MS Store package family name (advanced)',
   'settings.windows.extraCandidates': 'Windows: extra Community candidates (advanced)',
+
+  // Settings: about
+  'settings.aboutTitle': 'About',
+  'settings.installedVersion': 'Installed Version',
+  'settings.channel.dev': 'Dev',
+  'settings.channel.release': 'Release',
 } as const
 
 export type EnDict = typeof en

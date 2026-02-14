@@ -406,10 +406,13 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
     }
   )
 
-  ipcMain.handle(IPC.SYSTEM_APP_VERSION_GET, async () => {
+  const getAppVersion = async () => {
     const { app } = await import('electron')
-    return { version: app.getVersion() }
-  })
+    return { version: app.getVersion(), isPackaged: app.isPackaged }
+  }
+
+  ipcMain.handle(IPC.SYSTEM_GET_APP_VERSION, getAppVersion)
+  ipcMain.handle(IPC.SYSTEM_APP_VERSION_GET, getAppVersion)
 }
 
 function joinUrl(base: string, path: string): string {

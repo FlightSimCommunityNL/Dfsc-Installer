@@ -73,7 +73,7 @@ const api = {
     getLocale: () => ipcRenderer.invoke(IPC.SYSTEM_LOCALE_GET),
     getDiskSpace: (targetPath: string): Promise<IpcSystemDiskSpaceResult> =>
       ipcRenderer.invoke(IPC.SYSTEM_DISKSPACE_GET, { targetPath }),
-    getAppVersion: (): Promise<IpcSystemAppVersionResult> => ipcRenderer.invoke(IPC.SYSTEM_APP_VERSION_GET),
+    getAppVersion: (): Promise<IpcSystemAppVersionResult> => ipcRenderer.invoke(IPC.SYSTEM_GET_APP_VERSION),
   },
   onInstallProgress: (cb: (evt: IpcInstallProgressEvent) => void) => {
     const listener = (_: unknown, payload: IpcInstallProgressEvent) => cb(payload)

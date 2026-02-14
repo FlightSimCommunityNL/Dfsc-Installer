@@ -6,7 +6,7 @@ export function SettingsModal(props: {
   t: (k: any) => string
 
   appVersion: string | null
-  appChannel?: 'Dev' | 'Release'
+  appIsPackaged: boolean | null
 
   communityPath: string | null
   installPath: string | null
@@ -46,13 +46,7 @@ export function SettingsModal(props: {
             <div className="text-sm font-semibold">{props.t('settings.title')}</div>
             <div className="text-xs text-text-400 mt-1">{props.t('settings.subtitle')}</div>
           </div>
-
-          <div className="flex items-center gap-3">
-            <div className="text-[11px] text-text-400">
-              {props.appVersion ? `v${props.appVersion}` : ''}{props.appChannel ? ` (${props.appChannel})` : ''}
-            </div>
-            <button onClick={props.onClose} className="text-text-400 hover:text-text-100">Close</button>
-          </div>
+          <button onClick={props.onClose} className="text-text-400 hover:text-text-100">{props.t('common.close')}</button>
         </div>
 
         <div className="p-4 grid grid-cols-12 gap-3">
@@ -171,6 +165,18 @@ export function SettingsModal(props: {
               placeholder="D:\\MSFS\\Packages\\Community"
             />
           </label>
+
+          {/* About / app version */}
+          <div className="col-span-12 mt-2">
+            <div className="text-xs text-text-400 mb-1">{props.t('settings.aboutTitle')}</div>
+            <div className="rounded-xl border border-border bg-bg-800 px-3 py-3">
+              <div className="text-[11px] text-text-400">{props.t('settings.installedVersion')}</div>
+              <div className="mt-1 text-sm font-semibold text-text-100">
+                {props.appVersion ? `v${props.appVersion}` : '—'}
+                {props.appIsPackaged === false ? ` (${props.t('settings.channel.dev')})` : props.appIsPackaged === true ? ` (${props.t('settings.channel.release')})` : ''}
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="p-4 border-t border-border flex gap-2 justify-end">

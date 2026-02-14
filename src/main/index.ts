@@ -132,12 +132,17 @@ app.whenReady().then(async () => {
   try {
     // In dev we still show splash, but never block the main window.
 
-    if (app.isPackaged) {
-      try {
-        await promiseWithTimeout(runUpdateGate(), 10_000, 'update gate')
-      } catch (err) {
-        console.error('[updater error]', err)
-      }
+    try {
+      const res = await promiseWithTimeout(runUpdateGate(), 10_000, 'update gate')
+      console.log(`[startup] update result=${res}`)
+    } catch (err: any) {
+      console.warn('[startup] update result=timeout')
+      console.warn('[updater error]', err?.message ?? String(err))
+      splashSend({
+        phase: 'checking',
+        message: splashLang === 'nl' ? 'Updatecontrole duurde te lang. Starten…' : 'Update check timed out. Starting…',
+      })
+      await new Promise((r) => setTimeout(r, 1200))
     }
 
     try {
@@ -164,10 +169,25 @@ app.whenReady().then(async () => {
 
   void startupError
 
-  async function runUpdateGate(): Promise<boolean> {
+  async function runUpdateGate(): Promise<'available' | 'not-available' | 'error' | 'skipped'> {
+    const { owner, repo } = getGitHubReleasesOwnerRepo()
+    const atomUrl = `https://github.com/${owner}/${repo}/releases.atom`
+
+    console.log(`[startup] update check start (isPackaged=${app.isPackaged}, version=${app.getVersion()})`)
+    console.log(`[updates] owner=${owner} repo=${repo}`)
+    console.log(`[updates] expected atom url=${atomUrl}`)
+
+    if (!app.isPackaged) {
+      splashSend({
+        phase: 'starting',
+        message: splashLang === 'nl' ? 'Dev mode — starten…' : 'Dev mode — starting…',
+      })
+      await new Promise((r) => setTimeout(r, 400))
+      return 'skipped'
+    }
+
     splashSend({ phase: 'checking', message: splashLang === 'nl' ? 'Controleren op updates…' : 'Checking for updates…' })
 
-    const { owner, repo } = getGitHubReleasesOwnerRepo()
     const placeholder =
       !owner ||
       !repo ||
@@ -180,15 +200,27 @@ app.whenReady().then(async () => {
       }
       splashSend({
         phase: 'not-available',
-        message: splashLang === 'nl' ? 'Updates niet geconfigureerd' : 'Updates not configured',
+        message: splashLang === 'nl' ? 'Updates niet geconfigureerd — starten…' : 'Updates not configured — starting…',
       })
       // brief UX pause, then continue
       await new Promise((r) => setTimeout(r, 400))
-      return true
+      return 'skipped'
     }
 
     const { autoUpdater } = updater
     autoUpdater.autoDownload = true
+
+    // Match runtime updater behavior (optional prerelease + optional token for private repos).
+    const allowPrerelease = process.env.DFSC_ALLOW_PRERELEASE_UPDATES === '1'
+    autoUpdater.allowPrerelease = allowPrerelease
+
+    const runtimeToken = process.env.DFSC_GH_UPDATER_TOKEN
+    if (typeof runtimeToken === 'string' && runtimeToken.trim()) {
+      autoUpdater.requestHeaders = {
+        ...(autoUpdater.requestHeaders ?? {}),
+        Authorization: `token ${runtimeToken.trim()}`,
+      }
+    }
 
     autoUpdater.setFeedURL({ provider: 'github', owner, repo })
 
@@ -220,14 +252,20 @@ app.whenReady().then(async () => {
       })
 
       autoUpdater.on('update-available', async (info) => {
-        splashSend({ phase: 'available', message: `Update available: v${info?.version ?? ''}` })
+        splashSend({
+          phase: 'downloading',
+          message: splashLang === 'nl' ? 'Update beschikbaar — downloaden…' : 'Update available — downloading…',
+          percent: 0,
+        })
         try {
           await autoUpdater.downloadUpdate()
         } catch (e: any) {
           cleanup()
-          splashSend({ phase: 'error', message: e?.message ?? String(e) })
-          // fail open to manifest gate
-          resolve(true)
+          splashSend({
+            phase: 'checking',
+            message: splashLang === 'nl' ? 'Updatecontrole mislukt — starten…' : 'Update check failed — starting…',
+          })
+          setTimeout(() => resolve('error'), 1200)
         }
       })
 
@@ -241,12 +279,17 @@ app.whenReady().then(async () => {
         setTimeout(() => {
           autoUpdater.quitAndInstall(false, true)
         }, 1200)
-        resolve(false)
+        resolve('available')
       })
 
-      autoUpdater.on('update-not-available', () => {
+      autoUpdater.on('update-not-available', async () => {
         cleanup()
-        resolve(true)
+        splashSend({
+          phase: 'not-available',
+          message: splashLang === 'nl' ? 'Geen updates — starten…' : 'No updates — starting app…',
+        })
+        await new Promise((r) => setTimeout(r, 400))
+        resolve('not-available')
       })
 
       autoUpdater.on('error', (err) => {
@@ -261,7 +304,7 @@ app.whenReady().then(async () => {
           : 'Update check failed (offline or unavailable). Starting…'
 
         splashSend({ phase: 'checking', message: friendly })
-        setTimeout(() => resolve(true), 1200)
+        setTimeout(() => resolve('error'), 1200)
       })
 
       autoUpdater.checkForUpdates().catch((e: any) => {
@@ -275,7 +318,7 @@ app.whenReady().then(async () => {
           : 'Update check failed (offline or unavailable). Starting…'
 
         splashSend({ phase: 'checking', message: friendly })
-        setTimeout(() => resolve(true), 1200)
+        setTimeout(() => resolve('error'), 1200)
       })
     })
   }
