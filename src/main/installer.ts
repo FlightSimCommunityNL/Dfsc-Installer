@@ -1,10 +1,11 @@
 import { createHash } from 'crypto'
-import { createWriteStream } from 'fs'
+import { createWriteStream, createReadStream } from 'fs'
 import { mkdir, readdir, rm, stat } from 'fs/promises'
-import { join, basename, resolve } from 'path'
+import { join, basename, resolve, dirname } from 'path'
 import { request } from 'undici'
-import extractZip from 'extract-zip'
 import fse from 'fs-extra'
+import yauzl from 'yauzl'
+import { pipeline } from 'stream/promises'
 
 import type { InstallProgressEvent, ManifestAddon, ManifestAddonChannel } from '@shared/types'
 import { getTempBaseDir, verifyWritable } from './paths'
@@ -21,8 +22,60 @@ import { getDiskSpaceForPath } from './diskspace'
 export type ProgressSink = (evt: InstallProgressEvent) => void
 export type LogSink = (line: string) => void
 
+function clampPct(p: number): number {
+  const n = Number(p)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(100, n))
+}
+
+function mapOverall(phase: InstallProgressEvent['phase'], phasePercent?: number): number | undefined {
+  const p = typeof phasePercent === 'number' ? clampPct(phasePercent) : undefined
+  if (p == null) {
+    // If we don't have a phase percent, still provide a stable overall for some phases.
+    if (phase === 'verifying') return 60
+    if (phase === 'done') return 100
+    return undefined
+  }
+
+  if (phase === 'downloading') return clampPct(p * 0.6)
+  if (phase === 'extracting') return clampPct(60 + p * 0.25)
+  if (phase === 'installing') return clampPct(85 + p * 0.15)
+  if (phase === 'verifying') return 60
+  if (phase === 'done') return 100
+  return undefined
+}
+
+const progressThrottleState = new Map<string, { t: number; lastPct?: number }>()
+
 function emitProgress(sink: ProgressSink, evt: InstallProgressEvent) {
-  sink(evt)
+  const overall = evt.overallPercent ?? mapOverall(evt.phase, evt.percent)
+  sink({ ...evt, overallPercent: overall })
+}
+
+function emitProgressThrottled(
+  sink: ProgressSink,
+  evt: InstallProgressEvent,
+  opts?: { minIntervalMs?: number; force?: boolean }
+) {
+  const minIntervalMs = opts?.minIntervalMs ?? 100
+  const force = opts?.force === true
+
+  const pct = typeof evt.percent === 'number' ? clampPct(evt.percent) : undefined
+  const key = `${evt.addonId}:${evt.phase}`
+  const now = Date.now()
+  const prev = progressThrottleState.get(key)
+
+  const isTerminal = evt.phase === 'done' || pct === 100
+
+  if (!force && !isTerminal && prev) {
+    const tooSoon = now - prev.t < minIntervalMs
+    const samePct = pct != null && prev.lastPct != null ? Math.abs(pct - prev.lastPct) < 0.01 : false
+    if (tooSoon && samePct) return
+    if (tooSoon) return
+  }
+
+  progressThrottleState.set(key, { t: now, lastPct: pct })
+  emitProgress(sink, evt)
 }
 
 async function sha256File(path: string): Promise<string> {
@@ -88,6 +141,280 @@ async function sumDirBytes(dirPath: string): Promise<number> {
     }
   }
   return total
+}
+
+function assertUnderDir(baseDir: string, candidate: string) {
+  const base = resolve(baseDir)
+  const full = resolve(candidate)
+  if (!full.toLowerCase().startsWith(base.toLowerCase())) {
+    throw new Error(`Unsafe path traversal detected: ${full}`)
+  }
+}
+
+async function getZipTotals(zipPath: string): Promise<{ totalBytes: number; totalFiles: number }> {
+  const open = () =>
+    new Promise<any>((resolve, reject) => {
+      yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+        if (err || !zipfile) reject(err)
+        else resolve(zipfile)
+      })
+    })
+
+  const zipfile = await open()
+  let totalBytes = 0
+  let totalFiles = 0
+
+  await new Promise<void>((resolveP, rejectP) => {
+    zipfile.readEntry()
+    zipfile.on('entry', (entry: any) => {
+      const name = String(entry.fileName ?? '')
+      const isDir = name.endsWith('/')
+      if (!isDir) {
+        totalFiles += 1
+        totalBytes += Number(entry.uncompressedSize ?? 0)
+      }
+      zipfile.readEntry()
+    })
+    zipfile.on('end', () => resolveP())
+    zipfile.on('error', rejectP)
+  })
+
+  try {
+    zipfile.close()
+  } catch {
+    // ignore
+  }
+
+  return { totalBytes, totalFiles }
+}
+
+async function extractZipWithProgress(opts: {
+  addonId: string
+  zipPath: string
+  extractDir: string
+  progress: ProgressSink
+}): Promise<void> {
+  const { addonId, zipPath, extractDir, progress } = opts
+
+  emitProgress(progress, { addonId, phase: 'extracting', percent: 0, message: 'Preparing extraction…' })
+
+  const totals = await getZipTotals(zipPath)
+  const totalBytes = totals.totalBytes
+  const totalFiles = totals.totalFiles
+
+  let extractedBytes = 0
+  let extractedFiles = 0
+
+  const open = () =>
+    new Promise<any>((resolve, reject) => {
+      yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+        if (err || !zipfile) reject(err)
+        else resolve(zipfile)
+      })
+    })
+
+  const zipfile = await open()
+
+  const hasTotals = totalBytes > 0 || totalFiles > 0
+
+  const computePct = () => {
+    if (totalBytes > 0) return (extractedBytes / totalBytes) * 100
+    if (totalFiles > 0) return (extractedFiles / totalFiles) * 100
+    return undefined
+  }
+
+  const emit = (force?: boolean) => {
+    const pct = computePct()
+    const msg = totalFiles > 0 ? `Extracting (${extractedFiles}/${totalFiles})` : 'Extracting…'
+    emitProgressThrottled(
+      progress,
+      { addonId, phase: 'extracting', percent: pct == null ? undefined : clampPct(pct), message: msg },
+      { force, minIntervalMs: 100 }
+    )
+  }
+
+  // If we can't compute totals, tick periodically so UI never looks frozen.
+  const tick = !hasTotals
+    ? setInterval(() => {
+        emit(false)
+      }, 250)
+    : null
+
+  // start at 0
+  emitProgress(progress, { addonId, phase: 'extracting', percent: 0, message: totalFiles > 0 ? `Extracting (0/${totalFiles})` : 'Extracting…' })
+
+  try {
+    await new Promise<void>((resolveP, rejectP) => {
+    const onEntry = (entry: any) => {
+      const rel = String(entry.fileName ?? '')
+      if (!rel) {
+        zipfile.readEntry()
+        return
+      }
+
+      const destPath = join(extractDir, rel)
+      assertUnderDir(extractDir, destPath)
+
+      if (rel.endsWith('/')) {
+        void fse
+          .ensureDir(destPath)
+          .then(() => zipfile.readEntry())
+          .catch(rejectP)
+        return
+      }
+
+      void fse
+        .ensureDir(dirname(destPath))
+        .then(
+          () =>
+            new Promise<void>((res, rej) => {
+              zipfile.openReadStream(entry, (err: any, rs: any) => {
+                if (err || !rs) return rej(err)
+
+                rs.on('data', (chunk: Buffer) => {
+                  extractedBytes += chunk.length
+                  emit(false)
+                })
+
+                const ws = createWriteStream(destPath)
+                pipeline(rs, ws)
+                  .then(() => {
+                    extractedFiles += 1
+                    // Always emit on file completion so short files still show progress.
+                    emit(true)
+                    res()
+                  })
+                  .catch(rej)
+              })
+            })
+        )
+        .then(() => {
+          zipfile.readEntry()
+        })
+        .catch(rejectP)
+    }
+
+    zipfile.on('entry', onEntry)
+    zipfile.on('end', () => resolveP())
+    zipfile.on('error', rejectP)
+
+    zipfile.readEntry()
+    })
+  } finally {
+    if (tick) clearInterval(tick)
+  }
+
+  try {
+    zipfile.close()
+  } catch {
+    // ignore
+  }
+
+  emitProgress(progress, { addonId, phase: 'extracting', percent: 100, message: totalFiles > 0 ? `Extracting (${totalFiles}/${totalFiles})` : 'Extracting…' })
+}
+
+async function listFilesRecursive(root: string): Promise<Array<{ path: string; size: number; mode?: number }>> {
+  const out: Array<{ path: string; size: number; mode?: number }> = []
+
+  const walk = async (dir: string) => {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+    for (const ent of entries) {
+      const p = join(dir, ent.name)
+      if (ent.isDirectory()) {
+        await walk(p)
+      } else if (ent.isFile()) {
+        try {
+          const s = await stat(p)
+          out.push({ path: p, size: s.size, mode: (s as any).mode })
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  await walk(root)
+  return out
+}
+
+async function copyDirWithProgress(opts: {
+  addonId: string
+  srcDir: string
+  dstDir: string
+  progress: ProgressSink
+  totalBytes: number
+  totalFiles: number
+  counters: { copiedBytes: number; copiedFiles: number }
+}): Promise<void> {
+  const { addonId, srcDir, dstDir, progress, totalBytes, totalFiles, counters } = opts
+
+  await fse.ensureDir(dstDir)
+  const files = await listFilesRecursive(srcDir)
+
+  const hasTotals = totalBytes > 0 || totalFiles > 0
+
+  const computePct = () => {
+    if (totalBytes > 0) return (counters.copiedBytes / totalBytes) * 100
+    if (totalFiles > 0) return (counters.copiedFiles / totalFiles) * 100
+    return undefined
+  }
+
+  const emit = (force?: boolean) => {
+    const pct = computePct()
+    const msg = totalFiles > 0 ? `Installing (${counters.copiedFiles}/${totalFiles})` : 'Installing…'
+    emitProgressThrottled(
+      progress,
+      { addonId, phase: 'installing', percent: pct == null ? undefined : clampPct(pct), message: msg },
+      { force, minIntervalMs: 100 }
+    )
+  }
+
+  const tick = !hasTotals
+    ? setInterval(() => {
+        emit(false)
+      }, 250)
+    : null
+
+  try {
+    for (const f of files) {
+    const rel = path.relative(srcDir, f.path)
+    const dst = join(dstDir, rel)
+    assertUnderDir(dstDir, dst)
+    await fse.ensureDir(dirname(dst))
+
+    await new Promise<void>((resolveP, rejectP) => {
+      const rs = createReadStream(f.path)
+      rs.on('data', (chunk: Buffer) => {
+        counters.copiedBytes += chunk.length
+        emit(false)
+      })
+      rs.on('error', rejectP)
+      const ws = createWriteStream(dst)
+      ws.on('error', rejectP)
+      ws.on('finish', () => resolveP())
+      rs.pipe(ws)
+    })
+
+    counters.copiedFiles += 1
+    emit(true)
+
+    // Preserve permissions best-effort
+    if (typeof f.mode === 'number') {
+      try {
+        await fse.chmod(dst, f.mode)
+      } catch {
+        // ignore
+      }
+    }
+
+    // Yield occasionally so IPC + UI stay snappy even with huge file lists.
+    if (counters.copiedFiles % 50 === 0) {
+      await new Promise<void>((r) => setImmediate(r))
+    }
+    }
+  } finally {
+    if (tick) clearInterval(tick)
+  }
 }
 
 function requiredBytesFromInstalledSize(installedBytes: number): number {
@@ -652,10 +979,12 @@ async function autoDetectPackages(opts: { extractDir: string; log: LogSink }): P
 }
 
 async function atomicInstallFolders(opts: {
+  addonId: string
   packages: Array<{ folderName: string; srcPath: string }>
   communityPath: string
+  progress: ProgressSink
 }): Promise<string[]> {
-  const { packages, communityPath } = opts
+  const { addonId, packages, communityPath, progress } = opts
 
   await verifyWritable(communityPath)
 
@@ -684,13 +1013,50 @@ async function atomicInstallFolders(opts: {
   }
 
   try {
-    // Stage copies first
+    // Stage copies first (with progress)
+    emitProgress(progress, { addonId, phase: 'installing', percent: 0, message: 'Preparing install…' })
+
+    let totalBytes = 0
+    let totalFiles = 0
+
+    // Pre-scan for deterministic totals.
     for (const s of stages) {
       if (!(await fse.pathExists(s.src))) {
         throw new Error(`Package folder not found in extracted content: ${s.folderName}`)
       }
-      await fse.copy(s.src, s.stage)
+      const files = await listFilesRecursive(s.src)
+      totalFiles += files.length
+      totalBytes += files.reduce((a, f) => a + (f.size ?? 0), 0)
     }
+
+    const counters = { copiedBytes: 0, copiedFiles: 0 }
+
+    emitProgress(progress, {
+      addonId,
+      phase: 'installing',
+      percent: 0,
+      message: totalFiles > 0 ? `Installing (0/${totalFiles})` : 'Installing…',
+    })
+
+    for (const s of stages) {
+      await copyDirWithProgress({
+        addonId,
+        srcDir: s.src,
+        dstDir: s.stage,
+        progress,
+        totalBytes,
+        totalFiles,
+        counters,
+      })
+    }
+
+    // Ensure we end the copy at 100 within the phase.
+    emitProgress(progress, {
+      addonId,
+      phase: 'installing',
+      percent: 100,
+      message: totalFiles > 0 ? `Installing (${totalFiles}/${totalFiles})` : 'Installing…',
+    })
 
     // Swap
     for (const s of stages) {
@@ -795,10 +1161,8 @@ export class AddonInstallerService {
     }
 
     this.log(`[${addon.id}] Extracting ZIP`)
-    emitProgress(this.progress, { addonId: addon.id, phase: 'extracting' })
-
     await mkdir(extractDir, { recursive: true })
-    await extractZip(zipPath, { dir: extractDir })
+    await extractZipWithProgress({ addonId: addon.id, zipPath, extractDir, progress: this.progress })
 
     this.log(`[${addon.id}] [installer] extractDir=${extractDir}`)
     try {
@@ -841,7 +1205,7 @@ export class AddonInstallerService {
       }
 
       emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
-      const installedPaths = await atomicInstallFolders({ packages, communityPath: installPath })
+      const installedPaths = await atomicInstallFolders({ addonId: addon.id, packages, communityPath: installPath, progress: this.progress })
 
       emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
       this.log(`[${addon.id}] Done`)
@@ -888,7 +1252,7 @@ export class AddonInstallerService {
     }
 
     emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
-    const installedPaths = await atomicInstallFolders({ packages, communityPath: installPath })
+    const installedPaths = await atomicInstallFolders({ addonId: addon.id, packages, communityPath: installPath, progress: this.progress })
 
     emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
     this.log(`[${addon.id}] Done`)

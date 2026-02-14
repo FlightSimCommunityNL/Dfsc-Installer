@@ -99,7 +99,13 @@ export interface InstallProgressEvent {
     | 'installing'
     | 'uninstalling'
     | 'done'
+
+  /** Percent (0-100) within the current phase. */
   percent?: number
+
+  /** Overall percent (0-100) across download+extract+install, if available. */
+  overallPercent?: number
+
   transferredBytes?: number
   totalBytes?: number
   message?: string

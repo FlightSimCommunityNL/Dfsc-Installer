@@ -33,7 +33,10 @@ export function App() {
     | { status: 'error'; message: string }
   >({ status: 'idle' })
   const [installProgress, setInstallProgress] = useState<
-    Record<string, { phase: string; percent?: number; transferredBytes?: number; totalBytes?: number }>
+    Record<
+      string,
+      { phase: string; percent?: number; overallPercent?: number; message?: string; transferredBytes?: number; totalBytes?: number }
+    >
   >({})
   const [offlineMode, setOfflineMode] = useState(false)
 
@@ -85,11 +88,19 @@ export function App() {
     })
 
     const off2 = window.dfsc.onInstallProgress((evt) => {
+      // Dev-only logging to confirm we receive continuous extract/install updates.
+      if (!appIsPackaged && (evt.phase === 'extracting' || evt.phase === 'installing')) {
+        const overall = (evt as any).overallPercent
+        console.log(`[ui] progress phase=${evt.phase} percent=${evt.percent ?? 'n/a'} overall=${overall ?? 'n/a'} msg=${evt.message ?? ''}`)
+      }
+
       setInstallProgress((prev) => ({
         ...prev,
         [evt.addonId]: {
           phase: evt.phase,
           percent: evt.percent,
+          overallPercent: (evt as any).overallPercent,
+          message: evt.message,
           transferredBytes: evt.transferredBytes,
           totalBytes: evt.totalBytes,
         },
@@ -346,7 +357,15 @@ export function App() {
             selectedChannel={channel}
             installed={installedRec}
             installPathSet={!!(state?.settings.installPath ?? state?.settings.communityPath)}
-            progress={currentProgress ? { phase: currentProgress.phase, percent: currentProgress.percent } : undefined}
+            progress={
+              currentProgress
+                ? {
+                    phase: currentProgress.phase,
+                    percent: currentProgress.percent,
+                    overallPercent: (currentProgress as any).overallPercent,
+                  }
+                : undefined
+            }
             onRequestInstallOrUpdate={requestInstallOrUpdate}
             onUninstall={onUninstall}
           />

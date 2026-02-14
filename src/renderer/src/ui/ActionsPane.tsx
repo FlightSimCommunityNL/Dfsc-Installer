@@ -21,7 +21,7 @@ export function ActionsPane(props: {
   selectedChannel: AddonChannelKey
   installed: InstalledAddonRecord | undefined
   installPathSet: boolean
-  progress: { phase: string; percent?: number } | undefined
+  progress: { phase: string; percent?: number; overallPercent?: number } | undefined
   onRequestInstallOrUpdate: (action: 'install' | 'update') => void
   onUninstall: () => Promise<void>
 }) {
@@ -104,13 +104,27 @@ export function ActionsPane(props: {
           <div>
             {props.progress ? (
               <div className="mb-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-[11px] text-text-400">{props.progress.phase}</div>
-                  <div className="text-[11px] text-text-400">{(props.progress.percent ?? 0).toFixed(0)}%</div>
-                </div>
-                <div className="h-2 bg-bg-900 rounded mt-1 overflow-hidden">
-                  <div className="h-2 bg-accent" style={{ width: `${props.progress.percent ?? 0}%` }} />
-                </div>
+                {(() => {
+                  const raw = props.progress.overallPercent ?? props.progress.percent
+                  const isIndeterminate = raw == null || !Number.isFinite(raw)
+                  const pct = !isIndeterminate ? Math.max(0, Math.min(100, raw)) : 0
+
+                  return (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="text-[11px] text-text-400">{props.progress.phase}</div>
+                        <div className="text-[11px] text-text-400">{isIndeterminate ? '' : `${pct.toFixed(0)}%`}</div>
+                      </div>
+                      <div className="h-2 bg-bg-900 rounded mt-1 overflow-hidden relative">
+                        {isIndeterminate ? (
+                          <div className="dsfc-progress-indeterminate h-2 bg-accent" />
+                        ) : (
+                          <div className="h-2 bg-accent" style={{ width: `${pct}%` }} />
+                        )}
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
             ) : null}
 
