@@ -15,6 +15,16 @@ import type { AppSettings } from '@shared/types'
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 
+app.on('before-quit', () => {
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.destroy()
+    }
+  } catch {
+    // ignore
+  }
+})
+
 function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
   const isWin = process.platform === 'win32'
@@ -75,6 +85,7 @@ function splashSend(payload: any) {
 
 app.whenReady().then(async () => {
   const STARTUP_TIMEOUT_MS = 6_000
+  let installingUpdate = false
 
   // Windows: remove default application menu bar (File/Edit/View/...).
   if (process.platform === 'win32') {
@@ -133,6 +144,7 @@ app.whenReady().then(async () => {
   let startupError: any = null
   const startupTimeout = setTimeout(() => {
     console.warn('[startup] timeout fallback triggered')
+    if (installingUpdate) return
     try {
       openMainAndCloseSplash()
     } catch (e: any) {
@@ -146,6 +158,11 @@ app.whenReady().then(async () => {
     try {
       const res = await promiseWithTimeout(runUpdateGate(), 15_000, 'update gate')
       console.log(`[startup] update result=${res}`)
+      if (res === 'available') {
+        // update-downloaded triggers quitAndInstall shortly after; do not open main.
+        installingUpdate = true
+        return
+      }
     } catch (err: any) {
       console.warn('[startup] update result=timeout')
       console.warn('[updater error]', err?.message ?? String(err))
@@ -169,13 +186,15 @@ app.whenReady().then(async () => {
     startupError = err
   } finally {
     clearTimeout(startupTimeout)
-    console.log('[startup] opening main window')
-    try {
-      openMainAndCloseSplash()
-    } catch (e: any) {
-      console.error('[startup] openMain failed', e)
+    if (!installingUpdate) {
+      console.log('[startup] opening main window')
+      try {
+        openMainAndCloseSplash()
+      } catch (e: any) {
+        console.error('[startup] openMain failed', e)
+      }
+      console.log('[startup] splash closed')
     }
-    console.log('[startup] splash closed')
   }
 
   void startupError
@@ -286,6 +305,7 @@ app.whenReady().then(async () => {
 
       autoUpdater.on('update-downloaded', () => {
         cleanup()
+        installingUpdate = true
         splashSend({ phase: 'installing', message: splashLang === 'nl' ? 'Update installeren…' : 'Installing update…' })
         setTimeout(() => {
           autoUpdater.quitAndInstall(false, true)
@@ -396,8 +416,10 @@ app.whenReady().then(async () => {
 
     if (splashWindow && !splashWindow.isDestroyed()) {
       splashWindow.close()
+      splashWindow = null
+    } else {
+      splashWindow = null
     }
-    splashWindow = null
   }
 
   function promiseWithTimeout<T>(p: Promise<T>, timeoutMs: number, label: string): Promise<T> {

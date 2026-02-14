@@ -9,6 +9,7 @@ import { SettingsModal } from './SettingsModal'
 import { InstallConfirmModal } from './InstallConfirmModal'
 import { CommunityPathRequiredModal } from './CommunityPathRequiredModal'
 import { TitleBar } from './TitleBar'
+import { HeroBanner } from './HeroBanner'
 import { createT, mapLocaleToLang, type SupportedLang } from '../i18n'
 
 type Category = { id: string; name: string }
@@ -300,8 +301,15 @@ export function App() {
     <div className="h-screen w-screen bg-bg-800 text-text-100 overflow-hidden grid grid-rows-[auto_1fr]">
       <TitleBar title="Dfsc Installer" offline={offlineMode} version={appVersion} />
 
-      <div className="min-h-0 min-w-0 grid grid-cols-[76px_340px_1fr_220px]">
-        <div className="min-h-0 min-w-0">
+      <div
+        className="
+        grid
+        h-full
+        grid-cols-[76px_340px_1fr_220px]
+        grid-rows-[auto_1fr]
+        "
+      >
+        <div className="row-span-2 col-start-1">
           <IconBar
             categories={iconCategories}
             selectedCategoryId={selectedCategoryId ?? iconCategories[0]?.id ?? null}
@@ -314,7 +322,7 @@ export function App() {
           />
         </div>
 
-        <div className="min-h-0 min-w-0">
+        <div className="row-span-2 col-start-2">
           <SelectionPane
             categoryName={selectedCategoryName}
             t={t}
@@ -326,26 +334,30 @@ export function App() {
           />
         </div>
 
-        <div className="min-h-0 min-w-0 w-full overflow-hidden">
+        <div className="col-start-3 col-span-2 row-start-1">
+          <HeroBanner addon={selectedAddon} selectedChannel={channel} />
+        </div>
+
+        <div className="col-start-3 row-start-2 min-h-0 overflow-hidden">
           <ContentPane addon={selectedAddon} selectedChannel={channel} onSelectChannel={setChannel} t={t} />
         </div>
 
-        <div className="min-h-0 min-w-0">
+        <div className="col-start-4 row-start-2">
           <ActionsPane
-          addon={selectedAddon}
-          t={t}
-          selectedChannel={channel}
-          installed={installedRec}
-          installPathSet={!!(state?.settings.installPath ?? state?.settings.communityPath)}
-          progress={currentProgress ? { phase: currentProgress.phase, percent: currentProgress.percent } : undefined}
-          onRequestInstallOrUpdate={requestInstallOrUpdate}
-          onUninstall={onUninstall}
-          logs={logLines}
-          updateState={updateState}
-          onCheckUpdates={() => window.dfsc.updates.check()}
-          onDownloadUpdate={() => window.dfsc.updates.download()}
-          onRestartToInstall={() => window.dfsc.updates.quitAndInstall()}
-        />
+            addon={selectedAddon}
+            t={t}
+            selectedChannel={channel}
+            installed={installedRec}
+            installPathSet={!!(state?.settings.installPath ?? state?.settings.communityPath)}
+            progress={currentProgress ? { phase: currentProgress.phase, percent: currentProgress.percent } : undefined}
+            onRequestInstallOrUpdate={requestInstallOrUpdate}
+            onUninstall={onUninstall}
+            logs={logLines}
+            updateState={updateState}
+            onCheckUpdates={() => window.dfsc.updates.check()}
+            onDownloadUpdate={() => window.dfsc.updates.download()}
+            onRestartToInstall={() => window.dfsc.updates.quitAndInstall()}
+          />
         </div>
       </div>
 

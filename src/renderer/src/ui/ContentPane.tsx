@@ -1,24 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import type { AddonChannelKey, ManifestAddon } from '@shared/types'
-import fallbackBanner from '../assets/default-banner.jpg'
 import { ReleaseNotesSection } from './ReleaseNotesSection'
-
-function buildCacheBustedUrl(url: string, version?: string): string {
-  const raw = String(url ?? '')
-  if (!raw) return raw
-
-  try {
-    // Support absolute and relative URLs.
-    const u = new URL(raw, window.location.href)
-    const v = String(version ?? '').trim() || '1'
-    u.searchParams.set('v', v)
-    return u.toString()
-  } catch {
-    // Fallback: best-effort string concat.
-    const v = encodeURIComponent(String(version ?? '').trim() || '1')
-    return raw.includes('?') ? `${raw}&v=${v}` : `${raw}?v=${v}`
-  }
-}
 
 export function ContentPane(props: {
   t: (k: any) => string
@@ -28,7 +10,7 @@ export function ContentPane(props: {
 }) {
   if (!props.addon) {
     return (
-      <div className="h-screen bg-bg-800 overflow-hidden">
+      <div className="h-full bg-bg-800 overflow-hidden">
         <div className="h-full flex items-center justify-center">
           <div className="text-text-400 text-sm">{props.t('common.selectAddonToStart')}</div>
         </div>
@@ -37,31 +19,6 @@ export function ContentPane(props: {
   }
 
   const a = props.addon
-
-  const cacheKey = useMemo(() => {
-    const selected = a.channels?.[props.selectedChannel]
-
-    // Prefer selected channel version.
-    if (selected?.version) return selected.version
-
-    // Fallback: manifest schemaVersion if some custom manifests bubble it onto the addon (best-effort).
-    const anyAddon = a as any
-    if (typeof anyAddon?.schemaVersion === 'number' && Number.isFinite(anyAddon.schemaVersion)) {
-      return String(anyAddon.schemaVersion)
-    }
-
-    return '1'
-  }, [a, props.selectedChannel])
-
-  const computedBanner = useMemo(() => {
-    if (!a.bannerUrl) return fallbackBanner
-    return buildCacheBustedUrl(a.bannerUrl, cacheKey)
-  }, [a.bannerUrl, cacheKey])
-
-  const [bannerSrc, setBannerSrc] = useState<string>(computedBanner)
-  useEffect(() => {
-    setBannerSrc(computedBanner)
-  }, [computedBanner])
 
   const availableChannels = useMemo(() => {
     const keys: AddonChannelKey[] = ['stable', 'beta', 'dev']
@@ -88,22 +45,6 @@ export function ContentPane(props: {
 
   return (
     <div className="w-full min-w-0 h-full min-h-0 bg-bg-800 overflow-y-auto overflow-x-hidden">
-      {/* BannerRow (edge-to-edge; no padding, no centering) */}
-      <div className="w-full min-w-0">
-        <div className="w-full min-w-0 aspect-[16/6] relative">
-          <img
-            src={bannerSrc}
-            loading="lazy"
-            onError={() => {
-              if (bannerSrc !== fallbackBanner) setBannerSrc(fallbackBanner)
-            }}
-            className="absolute inset-0 w-full h-full object-cover"
-            alt={`${a.name} banner`}
-          />
-        </div>
-      </div>
-
-      {/* ContentBody (padded) */}
       <div className="px-8 pt-5">
         <div className="mt-0">
           <div className="text-sm text-text-400">{props.t('content.chooseVersion')}</div>
