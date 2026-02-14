@@ -8,7 +8,7 @@ type UpdateUiState =
   | { kind: 'downloading'; percent: number }
   | { kind: 'ready'; version?: string }
 
-export function TitleBar(props: { title?: string; offline?: boolean }) {
+export function TitleBar(props: { title?: string; offline?: boolean; version?: string | null }) {
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
   const insetX = isMac ? MACOS_TRAFFIC_INSET_X : 0
 
@@ -57,6 +57,7 @@ export function TitleBar(props: { title?: string; offline?: boolean }) {
         <img
           src={dfscLogo}
           alt="DFSC"
+          title={props.version ? `v${props.version}` : undefined}
           className="h-5 w-auto dsfc-no-drag"
           draggable={false}
           style={{ WebkitAppRegion: 'no-drag' as any }}

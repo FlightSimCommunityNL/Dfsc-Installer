@@ -5,6 +5,9 @@ export function SettingsModal(props: {
   onClose: () => void
   t: (k: any) => string
 
+  appVersion: string | null
+  appChannel?: 'Dev' | 'Release'
+
   communityPath: string | null
   installPath: string | null
   installPathMode: 'followCommunity' | 'custom'
@@ -43,7 +46,13 @@ export function SettingsModal(props: {
             <div className="text-sm font-semibold">{props.t('settings.title')}</div>
             <div className="text-xs text-text-400 mt-1">{props.t('settings.subtitle')}</div>
           </div>
-          <button onClick={props.onClose} className="text-text-400 hover:text-text-100">Close</button>
+
+          <div className="flex items-center gap-3">
+            <div className="text-[11px] text-text-400">
+              {props.appVersion ? `v${props.appVersion}` : ''}{props.appChannel ? ` (${props.appChannel})` : ''}
+            </div>
+            <button onClick={props.onClose} className="text-text-400 hover:text-text-100">Close</button>
+          </div>
         </div>
 
         <div className="p-4 grid grid-cols-12 gap-3">

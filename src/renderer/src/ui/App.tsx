@@ -43,6 +43,7 @@ export function App() {
   const [languageModeDraft, setLanguageModeDraft] = useState<'system' | 'en' | 'nl'>('system')
 
   const [systemLocale, setSystemLocale] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
 
   const [channel, setChannel] = useState<AddonChannelKey>('stable')
 
@@ -55,6 +56,11 @@ export function App() {
       // renderer fallback
       setSystemLocale(typeof navigator !== 'undefined' ? navigator.language : null)
     })
+
+    window.dfsc.system
+      .getAppVersion()
+      .then((res: any) => setAppVersion(typeof res?.version === 'string' ? res.version : null))
+      .catch(() => setAppVersion(null))
 
     window.dfsc.settings.get().then((s) => {
       setState(s)
@@ -315,7 +321,7 @@ export function App() {
 
   return (
     <div className="h-screen w-screen bg-bg-800 text-text-100 overflow-hidden grid grid-rows-[auto_1fr]">
-      <TitleBar title="Dfsc Installer" offline={offlineMode} />
+      <TitleBar title="Dfsc Installer" offline={offlineMode} version={appVersion} />
 
       <div className="min-h-0 min-w-0 grid grid-cols-[76px_340px_1fr_220px]">
         <div className="min-h-0 min-w-0">
@@ -394,6 +400,8 @@ export function App() {
         open={showSettings}
         onClose={() => setShowSettings(false)}
         t={t}
+        appVersion={appVersion}
+        appChannel={import.meta.env.DEV ? 'Dev' : 'Release'}
         communityPath={state?.settings.communityPath ?? null}
         installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
         installPathMode={(state?.settings.installPathMode as any) ?? 'followCommunity'}

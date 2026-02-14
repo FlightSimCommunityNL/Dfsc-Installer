@@ -30,8 +30,18 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   autoUpdater.autoDownload = false
 
   // Ensure provider is GitHub Releases.
+  // Runtime must NOT require a token for public repos; GH_TOKEN is for CI publishing only.
   const { owner, repo } = getGitHubReleasesOwnerRepo()
   autoUpdater.setFeedURL({ provider: 'github', owner, repo })
+
+  // Extra diagnostic: the GitHub provider uses releases.atom for update discovery.
+  const atomUrl = `https://github.com/${owner}/${repo}/releases.atom`
+  ;(async () => {
+    const { app } = await import('electron')
+    console.log(
+      `[updates] provider=github owner=${owner} repo=${repo} url=${atomUrl} isPackaged=${app.isPackaged} version=${app.getVersion()}`
+    )
+  })().catch(() => {})
 
   autoUpdater.on('checking-for-update', () => {
     console.log('[updates] checking-for-update')
@@ -88,8 +98,30 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
     winSend(IPC.EVT_UPDATE_READY, live)
   })
 
-  autoUpdater.on('error', (err) => {
-    const payload: UpdateErrorPayload = { message: err?.message ?? String(err) }
+  autoUpdater.on('error', async (err) => {
+    const raw = err?.message ?? String(err)
+
+    let message = raw
+    try {
+      const { app } = await import('electron')
+
+      // Friendlier mapping for a very common case:
+      // - Wrong owner/repo OR
+      // - No releases published yet (or draft-only) OR
+      // - Repo is private/non-existent
+      const is404 = raw.includes(' 404') || raw.toLowerCase().includes('status code: 404') || raw.toLowerCase().includes('not found')
+      const mentionsAtom = raw.includes('releases.atom')
+
+      if (!app.isPackaged) {
+        message = 'Updates only available in release builds.'
+      } else if (is404 && mentionsAtom) {
+        message = 'Update check failed (404). No releases published yet, or repo owner/repo is misconfigured.'
+      }
+    } catch {
+      // ignore
+    }
+
+    const payload: UpdateErrorPayload = { message }
     console.error('[updates] error', payload.message)
     winSend(IPC.UPDATE_ERROR, payload)
   })
@@ -100,6 +132,7 @@ export async function checkForUpdates() {
   const { app } = await import('electron')
   if (!app.isPackaged) {
     console.log('[updates] Skip checkForUpdates because application is not packed')
+    winSend(IPC.UPDATE_ERROR, { message: 'Updates only available in release builds.' })
     return null
   }
   console.log('[updates] checkForUpdates()')
@@ -133,6 +166,7 @@ export async function downloadUpdate() {
   const { app } = await import('electron')
   if (!app.isPackaged) {
     console.log('[updates] Skip downloadUpdate because application is not packed')
+    winSend(IPC.UPDATE_ERROR, { message: 'Updates only available in release builds.' })
     return null
   }
   console.log('[updates] downloadUpdate()')
@@ -143,6 +177,7 @@ export async function quitAndInstall() {
   const { app } = await import('electron')
   if (!app.isPackaged) {
     console.log('[updates] Skip quitAndInstall because application is not packed')
+    winSend(IPC.UPDATE_ERROR, { message: 'Updates only available in release builds.' })
     return
   }
   console.log('[updates] quitAndInstall()')

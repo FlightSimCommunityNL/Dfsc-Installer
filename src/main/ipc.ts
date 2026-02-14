@@ -352,14 +352,23 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
   })
 
   ipcMain.handle(IPC.UPDATE_CHECK, async () => {
+    const { app } = await import('electron')
+    if (!app.isPackaged) {
+      // don't throw; renderer shows friendly message via UPDATE_ERROR event
+      return { skipped: true, reason: 'not-packaged' }
+    }
     return checkForUpdates()
   })
 
   ipcMain.handle(IPC.UPDATE_DOWNLOAD, async () => {
+    const { app } = await import('electron')
+    if (!app.isPackaged) return { skipped: true, reason: 'not-packaged' }
     return downloadUpdate()
   })
 
   ipcMain.handle(IPC.UPDATE_QUIT_INSTALL, async () => {
+    const { app } = await import('electron')
+    if (!app.isPackaged) return { skipped: true, reason: 'not-packaged' }
     return quitAndInstall()
   })
 
@@ -396,6 +405,11 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
       return getDiskSpaceForPath(args?.targetPath)
     }
   )
+
+  ipcMain.handle(IPC.SYSTEM_APP_VERSION_GET, async () => {
+    const { app } = await import('electron')
+    return { version: app.getVersion() }
+  })
 }
 
 function joinUrl(base: string, path: string): string {
