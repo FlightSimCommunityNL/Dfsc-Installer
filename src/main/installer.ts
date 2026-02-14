@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { createWriteStream, createReadStream } from 'fs'
 import { mkdir, readdir, rm, stat } from 'fs/promises'
-import { join, basename, resolve, dirname } from 'path'
+import { join, basename, resolve, dirname, relative } from 'path'
 import { request } from 'undici'
 import fse from 'fs-extra'
 import yauzl from 'yauzl'
@@ -377,7 +377,7 @@ async function copyDirWithProgress(opts: {
 
   try {
     for (const f of files) {
-    const rel = path.relative(srcDir, f.path)
+    const rel = relative(srcDir, f.path)
     const dst = join(dstDir, rel)
     assertUnderDir(dstDir, dst)
     await fse.ensureDir(dirname(dst))
@@ -1117,7 +1117,8 @@ export class AddonInstallerService {
   }): Promise<{ installedPaths: string[]; installedVersion: string }> {
     const { addon, channel, installPath, channelKey } = params
 
-    const tempBase = join(getTempBaseDir(), 'dfsc-installer')
+    try {
+      const tempBase = join(getTempBaseDir(), 'dfsc-installer')
     await mkdir(tempBase, { recursive: true })
 
     const workDir = join(tempBase, `${addon.id}-${Date.now()}`)
@@ -1207,7 +1208,7 @@ export class AddonInstallerService {
       emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
       const installedPaths = await atomicInstallFolders({ addonId: addon.id, packages, communityPath: installPath, progress: this.progress })
 
-      emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
+      emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100, message: 'Installed' })
       this.log(`[${addon.id}] Done`)
 
       // Best-effort cleanup
@@ -1254,7 +1255,7 @@ export class AddonInstallerService {
     emitProgress(this.progress, { addonId: addon.id, phase: 'installing' })
     const installedPaths = await atomicInstallFolders({ addonId: addon.id, packages, communityPath: installPath, progress: this.progress })
 
-    emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100 })
+    emitProgress(this.progress, { addonId: addon.id, phase: 'done', percent: 100, message: 'Installed' })
     this.log(`[${addon.id}] Done`)
 
     // Best-effort cleanup
@@ -1265,6 +1266,17 @@ export class AddonInstallerService {
     }
 
     return { installedPaths, installedVersion: channel.version }
+    } catch (err: any) {
+      const msg = err?.message ?? String(err)
+      // Ensure UI never looks frozen on failure.
+      emitProgress(this.progress, {
+        addonId: addon.id,
+        phase: 'installing',
+        overallPercent: 85,
+        message: `Install failed: ${msg}`,
+      })
+      throw err
+    }
   }
 
   async uninstallAddon(params: { addonId: string; installedPaths: string[] }): Promise<void> {

@@ -80,6 +80,38 @@ function winSend(channel: string, payload?: any) {
   else win.webContents.send(channel, payload)
 }
 
+export function syncLiveUpdateStateToRenderer() {
+  // Re-emit current state so the renderer (TitleBar) can show the indicator even
+  // if the updater events fired before the renderer subscribed.
+  const state = controllerState
+
+  if (state.kind === 'available') {
+    const live: LiveUpdateAvailablePayload = { available: true, version: state.version }
+    winSend(IPC.EVT_UPDATE_AVAILABLE, live)
+    return
+  }
+
+  if (state.kind === 'downloading') {
+    const liveA: LiveUpdateAvailablePayload = { available: true }
+    winSend(IPC.EVT_UPDATE_AVAILABLE, liveA)
+    const liveP: LiveUpdateProgressPayload = { percent: state.percent }
+    winSend(IPC.EVT_UPDATE_PROGRESS, liveP)
+    return
+  }
+
+  if (state.kind === 'downloaded' || state.kind === 'installing') {
+    const liveA: LiveUpdateAvailablePayload = { available: true }
+    winSend(IPC.EVT_UPDATE_AVAILABLE, liveA)
+    const liveR: LiveUpdateReadyPayload = { version: (state as any).version }
+    winSend(IPC.EVT_UPDATE_READY, liveR)
+    return
+  }
+
+  // idle/checking/error => hide
+  const live: LiveUpdateAvailablePayload = { available: false }
+  winSend(IPC.EVT_UPDATE_AVAILABLE, live)
+}
+
 export function initUpdateManager(getWin: () => BrowserWindow | null) {
   currentGetWin = getWin
 

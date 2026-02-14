@@ -186,7 +186,17 @@ app.whenReady().then(async () => {
       sendSplash: (payload: any) => splashSend(payload),
     })
 
-    void startBackgroundUpdatePolling()
+    // Only start polling after renderer has loaded, otherwise live titlebar events
+    // can be emitted before the renderer subscribes.
+    mainWindow.webContents.once('did-finish-load', async () => {
+      try {
+        const { syncLiveUpdateStateToRenderer } = await import('./updater')
+        syncLiveUpdateStateToRenderer()
+      } catch {
+        // ignore
+      }
+      void startBackgroundUpdatePolling()
+    })
 
     mainWindow.once('ready-to-show', () => {
       console.log('[startup] main ready-to-show')
@@ -548,7 +558,16 @@ app.on('activate', () => {
   })
 
   initUpdateManager(() => mainWindow)
-  void startBackgroundUpdatePolling()
+
+  mainWindow.webContents.once('did-finish-load', async () => {
+    try {
+      const { syncLiveUpdateStateToRenderer } = await import('./updater')
+      syncLiveUpdateStateToRenderer()
+    } catch {
+      // ignore
+    }
+    void startBackgroundUpdatePolling()
+  })
 })
 
 app.on('window-all-closed', () => {
