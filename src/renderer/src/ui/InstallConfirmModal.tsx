@@ -13,6 +13,7 @@ export function InstallConfirmModal(props: {
   action: 'install' | 'update'
   installPath: string | null
   requiredBytes: number
+  isInstalling?: boolean
   onCancel: () => void
   onConfirm: () => void
 }) {
@@ -35,16 +36,17 @@ export function InstallConfirmModal(props: {
       .finally(() => setLoading(false))
   }, [props.open, props.installPath])
 
-  const afterBytes = useMemo(() => {
-    const free = disk?.freeBytes
-    if (typeof free !== 'number') return null
-    return free - props.requiredBytes
-  }, [disk?.freeBytes, props.requiredBytes])
+  const freeBytes = disk?.freeBytes ?? 0
+  const requiredBytes = props.requiredBytes
 
-  const insufficient = useMemo(() => {
-    if (!disk) return false
-    return disk.freeBytes < props.requiredBytes
-  }, [disk, props.requiredBytes])
+  const afterBytes = useMemo(() => {
+    if (!disk) return null
+    return freeBytes - requiredBytes
+  }, [disk, freeBytes, requiredBytes])
+
+  // Deterministic disabled logic for the confirm action.
+  const hasEnoughSpace = freeBytes >= requiredBytes
+  const isDisabled = !hasEnoughSpace || props.isInstalling === true
 
   if (!props.open) return null
 
@@ -92,7 +94,7 @@ export function InstallConfirmModal(props: {
             </div>
           ) : null}
 
-          {insufficient ? (
+          {!hasEnoughSpace && disk ? (
             <div className="col-span-12 text-[11px] text-highlight bg-highlight/10 border border-highlight/30 rounded-xl px-3 py-2">
               {props.t('installConfirm.notEnough')}
             </div>
@@ -104,11 +106,16 @@ export function InstallConfirmModal(props: {
             {props.t('common.cancel')}
           </button>
           <button
-            onClick={props.onConfirm}
-            disabled={!props.installPath || !!diskError || insufficient || loading || !disk}
+            disabled={isDisabled}
+            onClick={() => {
+              if (isDisabled) return
+              props.onConfirm()
+            }}
             className={
-              `px-4 py-2 rounded-xl bg-accent text-black text-sm font-semibold transition ` +
-              (!props.communityPath || !!diskError || insufficient || loading || !disk ? ' opacity-40 cursor-not-allowed' : 'hover:brightness-110')
+              `px-4 py-2 rounded-md font-medium transition-colors ` +
+              (isDisabled
+                ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
+                : 'bg-accent text-white hover:bg-accent/90 cursor-pointer')
             }
           >
             {props.action === 'install' ? props.t('installConfirm.confirmInstall') : props.t('installConfirm.confirmUpdate')}

@@ -369,6 +369,7 @@ export function App() {
         action={confirmAction}
         installPath={(state?.settings.installPath ?? state?.settings.communityPath) ?? null}
         requiredBytes={requiredBytes}
+        isInstalling={currentProgress != null && currentProgress.phase !== 'done'}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={async () => {
           setConfirmOpen(false)
