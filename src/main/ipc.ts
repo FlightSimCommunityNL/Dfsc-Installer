@@ -378,7 +378,9 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
   })
 
   ipcMain.handle(IPC.IPC_UPDATE_INSTALL, async () => {
-    return quitAndInstall()
+    // Routed via updater controller handoff (shows splash, hides main).
+    const { installUpdateViaSplashHandoff } = await import('./updater')
+    return installUpdateViaSplashHandoff()
   })
 
   ipcMain.handle(IPC.OPEN_EXTERNAL, async (_evt, args: { url: string }) => {

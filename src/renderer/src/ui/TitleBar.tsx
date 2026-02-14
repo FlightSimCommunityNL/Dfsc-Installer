@@ -15,7 +15,7 @@ export function TitleBar(props: { title?: string; offline?: boolean; version?: s
   const [updateState, setUpdateState] = useState<UpdateUiState>({ kind: 'hidden' })
 
   useEffect(() => {
-    const api: any = (window as any).dfsc ?? (window as any).dsfc
+    const api: any = (window as any).dfsc
     const updates = api?.updates
     if (!updates?.onAvailable || !updates?.onProgress || !updates?.onReady) return
 
@@ -84,7 +84,7 @@ export function TitleBar(props: { title?: string; offline?: boolean; version?: s
             }
             style={{ WebkitAppRegion: 'no-drag' as any }}
             onClick={() => {
-              const api: any = (window as any).dfsc ?? (window as any).dsfc
+              const api: any = (window as any).dfsc
               const updates = api?.updates
               if (!updates) return
 

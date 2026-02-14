@@ -38,7 +38,52 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Build & publish (Windows x64)
+      - name: Prepare code signing certificate (PFX)
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          if (-not $env:CSC_LINK) {
+            Write-Error "Missing CSC_LINK secret. Add a base64-encoded PFX as CSC_LINK.";
+            exit 1
+          }
+          if (-not $env:CSC_KEY_PASSWORD) {
+            Write-Error "Missing CSC_KEY_PASSWORD secret.";
+            exit 1
+          }
+
+          # If CSC_LINK looks like base64, decode to a local file. Otherwise assume it's a path/URL.
+          $looksBase64 = ($env:CSC_LINK.Length -gt 100) -and ($env:CSC_LINK -match '^[A-Za-z0-9+/=]+$')
+          if ($looksBase64) {
+            $pfxPath = Join-Path $env:GITHUB_WORKSPACE 'codesign.pfx'
+            [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:CSC_LINK))
+            "CSC_LINK=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "Decoded PFX to $pfxPath"
+          } else {
+            "CSC_LINK=$($env:CSC_LINK)" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "Using CSC_LINK as provided (path/URL)"
+          }
+          "CSC_KEY_PASSWORD=$($env:CSC_KEY_PASSWORD)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build, sign & publish (Windows x64)
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: npx electron-builder --win --x64 --publish always
+
+      - name: Verify Authenticode signature (installer)
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path release -Filter *.exe -Recurse | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "No installer .exe found under release/.";
+            dir release;
+            exit 1
+          }
+          Write-Host "Verifying signature for $($exe.FullName)"
+          $sig = Get-AuthenticodeSignature $exe.FullName
+          $sig | Format-List *
+          if ($sig.Status -ne 'Valid') {
+            Write-Error "Authenticode signature invalid: $($sig.Status)";
+            exit 1
+          }

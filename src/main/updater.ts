@@ -14,8 +14,63 @@ import { ALLOW_PRERELEASE_UPDATES, getGitHubReleasesOwnerRepo, getGitHubReleaseP
 
 const { autoUpdater } = updater
 
+type UpdateControllerState =
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'available'; version: string }
+  | { kind: 'downloading'; percent: number }
+  | { kind: 'downloaded'; version: string }
+  | { kind: 'installing'; version?: string }
+  | { kind: 'error'; message: string }
+
+let controllerState: UpdateControllerState = { kind: 'idle' }
+
 let currentGetWin: (() => BrowserWindow | null) | null = null
 let pollingTimer: NodeJS.Timeout | null = null
+
+let handoff: null | {
+  hideMain: () => void
+  showSplash: () => void
+  sendSplash: (payload: any) => void
+} = null
+
+export function setUpdateHandoffHandlers(h: {
+  hideMain: () => void
+  showSplash: () => void
+  sendSplash: (payload: any) => void
+}) {
+  handoff = h
+}
+
+export function getUpdateControllerState(): UpdateControllerState {
+  return controllerState
+}
+
+export async function installUpdateViaSplashHandoff() {
+  const { app } = await import('electron')
+  if (!app.isPackaged) {
+    console.log('[updates] install skipped: not packaged')
+    return
+  }
+
+  if (controllerState.kind !== 'downloaded') {
+    throw new Error('Update is not ready to install yet.')
+  }
+
+  console.log('[updates] install handoff -> splash')
+  controllerState = { kind: 'installing', version: controllerState.version }
+
+  try {
+    handoff?.hideMain()
+    handoff?.showSplash()
+    handoff?.sendSplash({ phase: 'installing', message: 'Installing update…' })
+  } catch {
+    // ignore
+  }
+
+  await new Promise((r) => setTimeout(r, 600))
+  autoUpdater.quitAndInstall(false, true)
+}
 
 function winSend(channel: string, payload?: any) {
   const win = currentGetWin?.() ?? null
@@ -58,11 +113,13 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
 
   autoUpdater.on('checking-for-update', () => {
     console.log('[updates] checking-for-update')
+    controllerState = { kind: 'checking' }
     winSend(IPC.UPDATE_CHECKING)
   })
 
   autoUpdater.on('update-available', (info) => {
     console.log('[updates] update available', { version: info?.version, releaseName: (info as any)?.releaseName })
+    controllerState = { kind: 'available', version: info.version }
 
     // Existing "Updates" panel event
     const payload: UpdateAvailablePayload = {
@@ -79,6 +136,7 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
 
   autoUpdater.on('update-not-available', () => {
     console.log('[updates] update-not-available')
+    controllerState = { kind: 'idle' }
     winSend(IPC.UPDATE_NOT_AVAILABLE)
 
     const live: LiveUpdateAvailablePayload = { available: false }
@@ -87,6 +145,7 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
 
   autoUpdater.on('download-progress', (p) => {
     const pct = typeof p?.percent === 'number' ? p.percent : 0
+    controllerState = { kind: 'downloading', percent: pct }
     console.log('[updates] download progress', `${pct.toFixed(0)}%`)
 
     const payload: UpdateProgressPayload = {
@@ -103,6 +162,7 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log('[updates] update ready', { version: info?.version, downloadedFile: (info as any)?.downloadedFile })
+    controllerState = { kind: 'downloaded', version: info.version }
 
     const payload: UpdateDownloadedPayload = { version: info.version }
     winSend(IPC.UPDATE_DOWNLOADED, payload)
@@ -159,6 +219,7 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
     }
 
     const payload: UpdateErrorPayload = { message }
+    controllerState = { kind: 'error', message }
     console.error('[updates] error (user-facing):', payload.message)
     winSend(IPC.UPDATE_ERROR, payload)
   })

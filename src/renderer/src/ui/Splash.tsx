@@ -75,31 +75,25 @@ export function Splash() {
   }, [status.phase, status.percent, lang])
 
   return (
-    <div className="h-screen w-screen bg-bg-800 text-text-100 flex items-center justify-center">
-      <div className="w-[420px]">
-        <div className="flex items-center gap-4">
-          <img src={dfscLogo} className="h-14 w-auto" alt="DFSC" draggable={false} />
-          <div>
-            <div className="text-lg font-bold">Dfsc Installer</div>
-            <div className="text-xs text-text-400">Dutch Flight Sim Community</div>
-          </div>
+    <div className="h-screen w-screen bg-[#101828] text-text-100 flex items-center justify-center">
+      <div className="w-[420px] text-center">
+        <img src={dfscLogo} className="h-16 w-auto mx-auto" alt="DFSC" draggable={false} />
+        <div className="mt-4 text-sm font-semibold">{progressText ?? status.message}</div>
+
+        <div className="mt-5 h-2 bg-bg-900/60 rounded-full overflow-hidden">
+          <div
+            className="h-2 bg-accent transition-[width] duration-300"
+            style={{ width: `${Math.max(0, Math.min(100, status.phase === 'downloading' ? status.percent ?? 0 : status.phase === 'installing' ? 100 : 0))}%` }}
+          />
         </div>
 
-        <div className="mt-8 rounded-xl border border-border bg-bg-900 p-4">
-          <div className="text-sm font-semibold">{progressText ?? status.message}</div>
+        <div className="mt-3 text-[11px] text-text-400">{t('closeAuto')}</div>
 
-          {status.phase === 'downloading' && typeof status.percent === 'number' ? (
-            <div className="mt-3">
-              <div className="h-2 bg-bg-800 rounded overflow-hidden">
-                <div className="h-2 bg-accent" style={{ width: `${Math.max(0, Math.min(100, status.percent))}%` }} />
-              </div>
-            </div>
-          ) : null}
-
+        <div className="mt-5">
           {status.phase === 'offline-blocked' ? (
-            <div className="mt-3">
+            <div>
               <div className="text-[11px] text-highlight">{t('offlineBlocked')}</div>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex gap-2 justify-center">
                 <button
                   className="dsfc-no-drag px-3 py-2 rounded-lg border border-accent2/40 bg-accent2/20 text-xs text-text-200 hover:bg-accent2/30"
                   onClick={() => window.dfsc.splash.retryConnectivity()}
@@ -117,11 +111,9 @@ export function Splash() {
           ) : null}
 
           {status.phase === 'error' ? (
-            <div className="mt-2 text-[11px] text-highlight">{t('continuing')}</div>
+            <div className="mt-2 text-[11px] text-text-400">{t('continuing')}</div>
           ) : null}
         </div>
-
-        <div className="mt-3 text-[11px] text-text-400">{t('closeAuto')}</div>
       </div>
     </div>
   )

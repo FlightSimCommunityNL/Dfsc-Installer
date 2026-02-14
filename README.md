@@ -77,10 +77,17 @@ Build-time publish config:
 This repo includes `.github/workflows/release.yml` which:
 - triggers on tags like `v0.1.0`
 - builds Windows NSIS
+- signs the installer (Authenticode)
 - publishes a GitHub Release via `electron-builder`
 
-You must add a repo secret:
+You must add repo secrets:
 - `GH_TOKEN` → a GitHub token that can create releases and upload assets
+- `CSC_LINK` → base64-encoded PFX (code signing certificate)
+- `CSC_KEY_PASSWORD` → password for the PFX
+
+Notes:
+- Timestamping is configured via RFC3161 (so signatures remain valid after cert expiry).
+- SmartScreen reputation still improves over time; EV certificates help more.
 
 ### How to cut a release
 1) Bump `package.json` version (e.g. `0.1.0` → `0.1.1`).

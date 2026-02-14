@@ -3,7 +3,7 @@ import { join } from 'path'
 import path from 'path'
 import { MACOS_TRAFFIC_LIGHT_POS } from '@shared/windowChrome'
 import { registerIpc } from './ipc'
-import { initUpdateManager, startBackgroundUpdatePolling } from './updater'
+import { initUpdateManager, setUpdateHandoffHandlers, startBackgroundUpdatePolling } from './updater'
 import updater from 'electron-updater'
 import { IPC } from '@shared/ipc'
 import { createSplashWindow } from './splash'
@@ -105,6 +105,17 @@ app.whenReady().then(async () => {
   })
   console.log('[startup] splash shown')
 
+  // In dev: show splash briefly, then open the app regardless of networking.
+  if (!app.isPackaged) {
+    setTimeout(() => {
+      try {
+        openMainAndCloseSplash()
+      } catch {
+        // ignore
+      }
+    }, 600)
+  }
+
   // Splash IPC actions
   ipcMain.handle(IPC.SPLASH_QUIT, async () => {
     app.quit()
@@ -133,7 +144,7 @@ app.whenReady().then(async () => {
     // In dev we still show splash, but never block the main window.
 
     try {
-      const res = await promiseWithTimeout(runUpdateGate(), 10_000, 'update gate')
+      const res = await promiseWithTimeout(runUpdateGate(), 15_000, 'update gate')
       console.log(`[startup] update result=${res}`)
     } catch (err: any) {
       console.warn('[startup] update result=timeout')
@@ -354,6 +365,33 @@ app.whenReady().then(async () => {
     mainWindow = createWindow()
     registerIpc(() => mainWindow)
     initUpdateManager(() => mainWindow)
+
+    setUpdateHandoffHandlers({
+      hideMain: () => {
+        try {
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide()
+        } catch {
+          // ignore
+        }
+      },
+      showSplash: () => {
+        try {
+          if (!splashWindow || splashWindow.isDestroyed()) {
+            splashWindow = createSplashWindow({
+              iconPath: path.join(process.cwd(), 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+              loadUrl: rendererUrl,
+              lang: splashLang,
+            })
+          } else {
+            splashWindow.show()
+          }
+        } catch {
+          // ignore
+        }
+      },
+      sendSplash: (payload: any) => splashSend(payload),
+    })
+
     void startBackgroundUpdatePolling()
 
     if (splashWindow && !splashWindow.isDestroyed()) {
