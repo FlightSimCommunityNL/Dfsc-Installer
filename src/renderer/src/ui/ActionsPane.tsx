@@ -42,7 +42,9 @@ export function ActionsPane(props: {
     }
 
     const ch = props.addon.channels[props.selectedChannel]
-    const available = !!ch
+    const hasChannel = !!ch && typeof ch.version === 'string' && !!ch.version
+    const hasDownloadUrl = !!(ch?.zipUrl || ch?.url)
+    const available = hasChannel && hasDownloadUrl
 
     if (!props.installed) {
       return {
@@ -53,12 +55,8 @@ export function ActionsPane(props: {
       }
     }
 
-    const installedMatchesChannel = props.installed.channel === props.selectedChannel
-    const remote = ch?.version
-
-    const updateAvailable =
-      available &&
-      (!installedMatchesChannel || (remote && remote !== props.installed.installedVersion))
+    const remoteVersion = ch?.version
+    const updateAvailable = !!remoteVersion && remoteVersion !== props.installed.installedVersion
 
     if (!updateAvailable) {
       return {
@@ -75,7 +73,7 @@ export function ActionsPane(props: {
       primaryLabel: 'Update',
       updateAvailable: true,
     }
-  }, [props.addon, props.selectedChannel, props.installed, props.installPathSet])
+  }, [props.addon, props.selectedChannel, props.installed])
 
   return (
     <div className="h-full min-h-0 min-w-0 w-[220px] bg-bg-800 border-l border-border flex flex-col overflow-hidden">
@@ -152,42 +150,141 @@ export function ActionsPane(props: {
               </div>
             ) : null}
 
-            <div className="mt-3 flex flex-col gap-2">
-              {decision.primaryLabel === 'Installed' ? (
-                <div className="px-3 py-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-sm font-semibold">
-                  {props.t('install.installed')}
-                </div>
-              ) : (
-                <button
-                  onClick={() => props.onRequestInstallOrUpdate(decision.primaryLabel === 'Update' ? 'update' : 'install')}
-                  disabled={!decision.canInstall}
-                  className={
-                    `px-3 py-3 rounded-xl text-sm font-semibold transition ` +
-                    (decision.primaryLabel === 'Install'
-                      ? 'bg-accent text-black hover:brightness-110'
-                      : 'bg-accent text-black hover:brightness-110') +
-                    (!decision.canInstall ? ' opacity-40 cursor-not-allowed' : '')
-                  }
-                >
-                  {decision.primaryLabel === 'Install'
-                    ? props.t('install.install')
-                    : decision.primaryLabel === 'Update'
-                      ? props.t('install.update')
-                      : props.t('install.installed')}
-                </button>
-              )}
+            {(() => {
+              // Single source of truth for status-based rendering.
+              const isInstalled = props.installed != null
+              const hasUpdate = decision.updateAvailable === true
+              const isBusy = props.progress != null && props.progress.phase !== 'done'
 
-              <button
-                onClick={props.onUninstall}
-                disabled={!decision.canUninstall}
-                className={
-                  `px-3 py-3 rounded-xl border border-border bg-bg-900 text-sm transition ` +
-                  (!decision.canUninstall ? ' opacity-40 cursor-not-allowed' : 'hover:bg-bg-800')
-                }
-              >
-                {props.t('install.uninstall')}
-              </button>
-            </div>
+              // Determine which button should show spinner.
+              const activeAction: 'installOrUpdate' | 'uninstall' | null =
+                !isBusy ? null : props.progress?.phase === 'uninstalling' ? 'uninstall' : 'installOrUpdate'
+
+              // Edge case: channel missing or invalid -> no install/update.
+              const hasInstallableChannel = decision.canInstall === true
+              const canInstallOrUpdate = hasInstallableChannel && props.installPathSet
+
+              if (!isInstalled) {
+                if (!hasInstallableChannel) return null
+
+                return (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      disabled={isBusy || !canInstallOrUpdate}
+                      onClick={() => {
+                        if (isBusy || !canInstallOrUpdate) return
+                        props.onRequestInstallOrUpdate('install')
+                      }}
+                      className={
+                        `px-3 py-3 rounded-xl text-sm font-semibold transition-colors ` +
+                        (isBusy || !canInstallOrUpdate
+                          ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
+                          : 'bg-accent text-white hover:bg-accent/90 cursor-pointer')
+                      }
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {activeAction === 'installOrUpdate' ? <Spinner /> : null}
+                        {props.t('install.install')}
+                      </span>
+                    </button>
+                  </div>
+                )
+              }
+
+              if (isInstalled && !hasUpdate) {
+                return (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      disabled={isBusy}
+                      onClick={() => {
+                        if (isBusy) return
+                        void props.onUninstall()
+                      }}
+                      className={
+                        `px-3 py-3 rounded-xl text-sm font-semibold transition-colors border ` +
+                        (isBusy
+                          ? 'border-red-500 text-red-300 opacity-50 cursor-not-allowed'
+                          : 'border-red-500 text-red-500 hover:bg-red-500/10 cursor-pointer')
+                      }
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {activeAction === 'uninstall' ? <Spinner /> : null}
+                        {props.t('install.uninstall')}
+                      </span>
+                    </button>
+                  </div>
+                )
+              }
+
+              // isInstalled && hasUpdate
+              // If update is available but channel isn't installable (missing url/version), fall back to uninstall-only.
+              if (!hasInstallableChannel) {
+                return (
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      disabled={isBusy}
+                      onClick={() => {
+                        if (isBusy) return
+                        void props.onUninstall()
+                      }}
+                      className={
+                        `px-3 py-3 rounded-xl text-sm font-semibold transition-colors border ` +
+                        (isBusy
+                          ? 'border-red-500 text-red-300 opacity-50 cursor-not-allowed'
+                          : 'border-red-500 text-red-500 hover:bg-red-500/10 cursor-pointer')
+                      }
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        {activeAction === 'uninstall' ? <Spinner /> : null}
+                        {props.t('install.uninstall')}
+                      </span>
+                    </button>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="mt-3 flex flex-col gap-2">
+                  <button
+                    disabled={isBusy || !canInstallOrUpdate}
+                    onClick={() => {
+                      if (isBusy || !canInstallOrUpdate) return
+                      props.onRequestInstallOrUpdate('update')
+                    }}
+                    className={
+                      `px-3 py-3 rounded-xl text-sm font-semibold transition-colors ` +
+                      (isBusy || !canInstallOrUpdate
+                        ? 'bg-gray-600 text-gray-300 opacity-50 cursor-not-allowed'
+                        : 'bg-accent text-white hover:bg-accent/90 cursor-pointer')
+                    }
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      {activeAction === 'installOrUpdate' ? <Spinner /> : null}
+                      {props.t('install.update')}
+                    </span>
+                  </button>
+
+                  <button
+                    disabled={isBusy}
+                    onClick={() => {
+                      if (isBusy) return
+                      void props.onUninstall()
+                    }}
+                    className={
+                      `px-3 py-3 rounded-xl text-sm font-semibold transition-colors border ` +
+                      (isBusy
+                        ? 'border-red-500 text-red-300 opacity-50 cursor-not-allowed'
+                        : 'border-red-500 text-red-500 hover:bg-red-500/10 cursor-pointer')
+                    }
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      {activeAction === 'uninstall' ? <Spinner /> : null}
+                      {props.t('install.uninstall')}
+                    </span>
+                  </button>
+                </div>
+              )
+            })()}
 
             {!props.installPathSet ? (
               <div className="mt-3 text-[11px] text-text-400">
@@ -204,6 +301,15 @@ export function ActionsPane(props: {
         <LogDrawer t={props.t} logs={props.logs} onClose={() => setShowLogs(false)} />
       ) : null}
     </div>
+  )
+}
+
+function Spinner() {
+  return (
+    <span
+      className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+      aria-hidden="true"
+    />
   )
 }
 
