@@ -19,9 +19,16 @@ function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
   const isWin = process.platform === 'win32'
 
+  const iconPath =
+    isWin
+      ? app.isPackaged
+        ? path.join(process.resourcesPath, 'icon.ico')
+        : path.join(process.cwd(), 'build', 'icon.ico')
+      : path.join(process.cwd(), 'build', 'icon.png')
+
   const win = new BrowserWindow({
     show: false,
-    icon: path.join(process.cwd(), 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: iconPath,
     ...(isMac
       ? {
           titleBarStyle: 'hiddenInset' as const,
