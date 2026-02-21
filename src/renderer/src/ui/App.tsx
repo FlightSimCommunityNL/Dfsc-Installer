@@ -13,7 +13,7 @@ import { TitleBar } from './TitleBar'
 import { APP_DISPLAY_NAME } from '@shared/app-info'
 import { createT, mapLocaleToLang, type SupportedLang } from '../i18n'
 
-type Category = { id: string; name: string }
+type Category = { id: string; name: string; iconUrl?: string }
 
 type ContentView = 'configure' | 'releaseNotes' | 'about'
 
@@ -124,12 +124,21 @@ export function App() {
   }, [])
 
   const categories: Category[] = useMemo(() => {
-    return manifest?.categories?.map((c) => ({ id: c.id, name: c.name })) ?? []
+    return (
+      manifest?.categories?.map((c) => ({
+        id: c.id,
+        name: c.name,
+        iconUrl: typeof (c as any).iconUrl === 'string' && (c as any).iconUrl.trim() ? (c as any).iconUrl.trim() : undefined,
+      })) ?? []
+    )
   }, [manifest])
 
-  const selectedCategoryName = useMemo(() => {
-    return categories.find((c) => c.id === selectedCategoryId)?.name ?? 'Addons'
+  const selectedCategory = useMemo(() => {
+    return categories.find((c) => c.id === selectedCategoryId) ?? null
   }, [categories, selectedCategoryId])
+
+  const selectedCategoryName = selectedCategory?.name ?? 'Addons'
+  const selectedCategoryIconUrl = selectedCategory?.iconUrl
 
   const activeLang: SupportedLang = useMemo(() => {
     if (languageModeDraft === 'system') return mapLocaleToLang(systemLocale)
@@ -325,6 +334,7 @@ export function App() {
         <div className="h-full min-h-0 min-w-0 overflow-hidden row-span-2 col-start-2">
           <SelectionPane
             categoryName={selectedCategoryName}
+            categoryIconUrl={selectedCategoryIconUrl}
             t={t}
             addons={addons}
             selectedAddonId={selectedAddon?.id ?? null}

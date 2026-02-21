@@ -3,6 +3,11 @@ export type AddonChannelKey = 'stable' | 'beta' | 'dev'
 export interface ManifestCategory {
   id: string
   name: string
+
+  /** Optional URL to a small icon for the category (purely visual). */
+  iconUrl?: string
+
+  /** @deprecated legacy field (keep optional for backwards compatibility). */
   icon?: string
 }
 

@@ -6,6 +6,7 @@ const DISCORD_URL = "https://discord.gg/VaREFe3SAa"
 export function SelectionPane(props: {
   t: (k: any) => string
   categoryName: string
+  categoryIconUrl?: string
   addons: ManifestAddon[]
   selectedAddonId: string | null
   onSelectAddon: (id: string) => void
@@ -16,7 +17,22 @@ export function SelectionPane(props: {
     <div className="h-full min-h-0 min-w-0 w-[320px] bg-bg-800 border-r border-border flex flex-col overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-border">
         <div className="text-xs text-text-400">{props.t('common.category') ?? 'Category'}</div>
-        <div className="text-lg font-semibold">{props.categoryName}</div>
+        <div className="text-lg font-semibold flex items-center gap-2">
+          {props.categoryIconUrl ? (
+            <img
+              src={props.categoryIconUrl}
+              alt=""
+              className="w-5 h-5 rounded-sm"
+              draggable={false}
+              style={{ objectFit: 'contain' }}
+              onError={(e) => {
+                // Hide broken images without leaving a gap.
+                ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+              }}
+            />
+          ) : null}
+          <span>{props.categoryName}</span>
+        </div>
 
         <input
           value={props.search}

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedAt": "2026-02-11T00:00:00Z",
   "categories": [
-    { "id": "liveries", "name": "Liveries" }
+    { "id": "liveries", "name": "Liveries", "iconUrl": "https://example.com/icons/liveries.png" }
   ],
   "addons": [
     {
