@@ -138,7 +138,6 @@ export function App() {
   }, [categories, selectedCategoryId])
 
   const selectedCategoryName = selectedCategory?.name ?? 'Addons'
-  const selectedCategoryIconUrl = selectedCategory?.iconUrl
 
   const activeLang: SupportedLang = useMemo(() => {
     if (languageModeDraft === 'system') return mapLocaleToLang(systemLocale)
@@ -254,6 +253,7 @@ export function App() {
       id: c.id,
       label: c.name,
       tooltip: c.name,
+      iconUrl: typeof (c as any).iconUrl === 'string' && (c as any).iconUrl.trim() ? (c as any).iconUrl.trim() : undefined,
     }))
   }, [manifest])
 
@@ -334,7 +334,6 @@ export function App() {
         <div className="h-full min-h-0 min-w-0 overflow-hidden row-span-2 col-start-2">
           <SelectionPane
             categoryName={selectedCategoryName}
-            categoryIconUrl={selectedCategoryIconUrl}
             t={t}
             addons={addons}
             selectedAddonId={selectedAddon?.id ?? null}

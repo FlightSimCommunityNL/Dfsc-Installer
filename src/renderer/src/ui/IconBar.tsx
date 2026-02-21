@@ -5,6 +5,7 @@ export type IconCategory = {
   id: string
   label: string
   tooltip: string
+  iconUrl?: string
 }
 
 type IconKind = 'paint' | 'plane' | 'wrench' | 'map' | 'default'
@@ -43,6 +44,8 @@ export function IconBar(props: {
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-3 py-2">
         {props.categories.map((c) => {
           const selected = props.selectedCategoryId === c.id
+          const iconUrl = typeof c.iconUrl === 'string' && c.iconUrl.trim() ? c.iconUrl.trim() : null
+
           return (
             <button
               key={c.id}
@@ -55,7 +58,20 @@ export function IconBar(props: {
                   : 'border-transparent hover:border-border hover:bg-bg-800 text-text-400')
               }
             >
-              <CategoryGlyph id={c.id} />
+              {iconUrl ? (
+                <img
+                  src={iconUrl}
+                  alt=""
+                  className="w-5 h-5 rounded-sm"
+                  draggable={false}
+                  style={{ objectFit: 'contain' }}
+                  onError={(e) => {
+                    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                  }}
+                />
+              ) : (
+                <CategoryGlyph id={c.id} />
+              )}
             </button>
           )
         })}
