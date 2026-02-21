@@ -190,8 +190,10 @@ app.whenReady().then(async () => {
     // can be emitted before the renderer subscribes.
     mainWindow.webContents.once('did-finish-load', async () => {
       try {
-        const { syncLiveUpdateStateToRenderer } = await import('./updater')
+        const { syncLiveUpdateStateToRenderer, checkForUpdates } = await import('./updater')
         syncLiveUpdateStateToRenderer()
+        // Silent one-shot check on startup (non-blocking).
+        void checkForUpdates().catch(() => {})
       } catch {
         // ignore
       }
@@ -258,23 +260,8 @@ app.whenReady().then(async () => {
   try {
     // In dev we still show splash, but never block the main window.
 
-    try {
-      const res = await promiseWithTimeout(runUpdateGate(), 15_000, 'update gate')
-      console.log(`[startup] update result=${res}`)
-      if (res === 'available') {
-        // update-downloaded triggers quitAndInstall shortly after; do not open main.
-        installingUpdate = true
-        return
-      }
-    } catch (err: any) {
-      console.warn('[startup] update result=timeout')
-      console.warn('[updater error]', err?.message ?? String(err))
-      splashSend({
-        phase: 'checking',
-        message: splashLang === 'nl' ? 'Updatecontrole duurde te lang. Starten…' : 'Update check timed out. Starting…',
-      })
-      await new Promise((r) => setTimeout(r, 1200))
-    }
+    // Updates are checked silently after the main window is created.
+    // Do not block splash/main on update checks.
 
     try {
       console.log('[startup] manifest start')
@@ -301,186 +288,6 @@ app.whenReady().then(async () => {
 
   void startupError
 
-  async function runUpdateGate(): Promise<'available' | 'not-available' | 'error' | 'skipped'> {
-    const { owner, repo } = getGitHubReleasesOwnerRepo()
-    const atomUrl = `https://github.com/${owner}/${repo}/releases.atom`
-
-    console.log(`[startup] update check start (isPackaged=${app.isPackaged}, version=${app.getVersion()})`)
-    console.log(`[updates] owner=${owner} repo=${repo}`)
-    console.log(`[updates] expected atom url=${atomUrl}`)
-
-    if (!app.isPackaged) {
-      splashSend({
-        phase: 'starting',
-        message: splashLang === 'nl' ? 'Dev mode — starten…' : 'Dev mode — starting…',
-      })
-      await new Promise((r) => setTimeout(r, 400))
-      return 'skipped'
-    }
-
-    splashSend({ phase: 'checking', message: splashLang === 'nl' ? 'Controleren op updates…' : 'Checking for updates…' })
-
-    const placeholder =
-      !owner ||
-      !repo ||
-      owner.toUpperCase().includes('PLACEHOLDER') ||
-      repo.toUpperCase().includes('PLACEHOLDER')
-
-    if (placeholder) {
-      if (!app.isPackaged || process.env.NODE_ENV === 'development') {
-        console.log('[updates] skipped: not configured (placeholders)')
-      }
-      splashSend({
-        phase: 'not-available',
-        message: splashLang === 'nl' ? 'Updates niet geconfigureerd — starten…' : 'Updates not configured — starting…',
-      })
-      // brief UX pause, then continue
-      await new Promise((r) => setTimeout(r, 400))
-      return 'skipped'
-    }
-
-    const { autoUpdater } = updater
-    autoUpdater.autoDownload = true
-
-    // Match runtime updater behavior (optional prerelease + optional token for private repos).
-    const allowPrerelease = process.env.DFSC_ALLOW_PRERELEASE_UPDATES === '1'
-    autoUpdater.allowPrerelease = allowPrerelease
-
-    const runtimeToken = process.env.DFSC_GH_UPDATER_TOKEN
-    if (typeof runtimeToken === 'string' && runtimeToken.trim()) {
-      autoUpdater.requestHeaders = {
-        ...(autoUpdater.requestHeaders ?? {}),
-        Authorization: `token ${runtimeToken.trim()}`,
-      }
-    }
-
-    autoUpdater.setFeedURL({ provider: 'github', owner, repo })
-
-    const isLikelyOffline = (msg: string) => {
-      const m = msg.toLowerCase()
-      return (
-        m.includes('enetunreach') ||
-        m.includes('eai_again') ||
-        m.includes('enotfound') ||
-        m.includes('ecconnrefused') ||
-        m.includes('econnrefused') ||
-        m.includes('etimedout') ||
-        m.includes('network')
-      )
-    }
-
-    return new Promise<boolean>((resolve) => {
-      const cleanup = () => {
-        autoUpdater.removeAllListeners('checking-for-update')
-        autoUpdater.removeAllListeners('update-available')
-        autoUpdater.removeAllListeners('download-progress')
-        autoUpdater.removeAllListeners('update-downloaded')
-        autoUpdater.removeAllListeners('update-not-available')
-        autoUpdater.removeAllListeners('error')
-      }
-
-      autoUpdater.on('checking-for-update', () => {
-        splashSend({ phase: 'checking', message: splashLang === 'nl' ? 'Controleren op updates…' : 'Checking for updates…' })
-      })
-
-      autoUpdater.on('update-available', async (info) => {
-        splashSend({
-          phase: 'downloading',
-          message: splashLang === 'nl' ? 'Update beschikbaar — downloaden…' : 'Update available — downloading…',
-          percent: 0,
-        })
-        try {
-          await autoUpdater.downloadUpdate()
-        } catch (e: any) {
-          cleanup()
-          splashSend({
-            phase: 'checking',
-            message: splashLang === 'nl' ? 'Updatecontrole mislukt — starten…' : 'Update check failed — starting…',
-          })
-          setTimeout(() => resolve('error'), 1200)
-        }
-      })
-
-      autoUpdater.on('download-progress', (p) => {
-        splashSend({ phase: 'downloading', message: splashLang === 'nl' ? 'Update downloaden…' : 'Downloading update…', percent: p?.percent ?? 0 })
-      })
-
-      autoUpdater.on('update-downloaded', () => {
-        cleanup()
-        installingUpdate = true
-        splashSend({ phase: 'installing', message: splashLang === 'nl' ? 'Update installeren…' : 'Installing update…' })
-
-        // If something goes wrong and the installer never exits, fail-open.
-        const watchdog = setTimeout(() => {
-          console.warn('[updates] install watchdog triggered; failing open to main window')
-          try {
-            installingUpdate = false
-            splashSend({
-              phase: 'checking',
-              message:
-                splashLang === 'nl'
-                  ? 'Update installeren duurt te lang. Starten…'
-                  : 'Update install is taking too long. Starting…',
-            })
-            openMainWindow()
-          } catch {
-            // ignore
-          }
-        }, INSTALL_WATCHDOG_MS)
-
-        setTimeout(() => {
-          try {
-            splashSend({ phase: 'restarting', message: splashLang === 'nl' ? 'Herstarten…' : 'Restarting…' })
-            // Force silent install for NSIS (/S).
-            autoUpdater.quitAndInstall(true, true)
-          } finally {
-            clearTimeout(watchdog)
-          }
-        }, 800)
-
-        resolve('available')
-      })
-
-      autoUpdater.on('update-not-available', async () => {
-        cleanup()
-        splashSend({
-          phase: 'not-available',
-          message: splashLang === 'nl' ? 'Geen updates — starten…' : 'No updates — starting app…',
-        })
-        await new Promise((r) => setTimeout(r, 400))
-        resolve('not-available')
-      })
-
-      autoUpdater.on('error', (err) => {
-        cleanup()
-        const raw = err?.message ?? String(err)
-        console.warn('[updates] error:', raw)
-        if (err?.stack) console.warn('[updates] error.stack:', err.stack)
-
-        // Always fail-open with a non-scary message.
-        const friendly = splashLang === 'nl'
-          ? 'Updatecontrole mislukt (offline of niet beschikbaar). Starten…'
-          : 'Update check failed (offline or unavailable). Starting…'
-
-        splashSend({ phase: 'checking', message: friendly })
-        setTimeout(() => resolve('error'), 1200)
-      })
-
-      autoUpdater.checkForUpdates().catch((e: any) => {
-        cleanup()
-        const raw = e?.message ?? String(e)
-        console.warn('[updates] checkForUpdates failed:', raw)
-        if (e?.stack) console.warn('[updates] checkForUpdates stack:', e.stack)
-
-        const friendly = splashLang === 'nl'
-          ? 'Updatecontrole mislukt (offline of niet beschikbaar). Starten…'
-          : 'Update check failed (offline or unavailable). Starting…'
-
-        splashSend({ phase: 'checking', message: friendly })
-        setTimeout(() => resolve('error'), 1200)
-      })
-    })
-  }
 
   async function runManifestGate(opts: { allowBlock: boolean }) {
     splashSend({ phase: 'connecting', message: splashLang === 'nl' ? 'Verbinden…' : 'Connecting…' })
@@ -561,8 +368,9 @@ app.on('activate', () => {
 
   mainWindow.webContents.once('did-finish-load', async () => {
     try {
-      const { syncLiveUpdateStateToRenderer } = await import('./updater')
+      const { syncLiveUpdateStateToRenderer, checkForUpdates } = await import('./updater')
       syncLiveUpdateStateToRenderer()
+      void checkForUpdates().catch(() => {})
     } catch {
       // ignore
     }

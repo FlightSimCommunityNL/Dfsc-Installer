@@ -210,29 +210,11 @@ export function initUpdateManager(getWin: () => BrowserWindow | null) {
   })
 
   autoUpdater.on('update-downloaded', (info) => {
-    console.log('[updates] update ready', { version: info?.version, downloadedFile: (info as any)?.downloadedFile })
+    console.log('[updates] update downloaded', { version: info?.version, downloadedFile: (info as any)?.downloadedFile })
     controllerState = { kind: 'downloaded', version: info.version }
 
-    // Auto-install immediately (production, silent).
-    try {
-      controllerState = { kind: 'installing', version: info.version }
-      handoff?.hideMain()
-      handoff?.showSplash()
-      handoff?.sendSplash({ phase: 'installing', message: 'Installing update…' })
-    } catch {
-      // ignore
-    }
-
-    setTimeout(() => {
-      try {
-        if (!app.isPackaged) return
-        // Force silent install for NSIS (/S).
-        autoUpdater.quitAndInstall(true, true)
-      } catch {
-        // ignore
-      }
-    }, 800)
-
+    // Do NOT auto-install here. We want a Discord-like flow: download silently,
+    // then let the user choose when to restart/apply (via Settings or titlebar).
     const payload: UpdateDownloadedPayload = { version: info.version }
     winSend(IPC.UPDATE_DOWNLOADED, payload)
 

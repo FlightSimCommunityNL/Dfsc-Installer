@@ -1,7 +1,7 @@
 {
   "name": "dsfc-installer",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.2.0",
   "description": "Dutch Flight Sim Community Installer (Windows-only target)",
   "author": "Grazzy_Duck / Bas",
   "main": "out/main/index.js",

@@ -420,23 +420,15 @@ export function registerIpc(getWin: () => BrowserWindow | null) {
   })
 
   safeHandle(IPC.UPDATE_CHECK, async () => {
-    const { app } = await import('electron')
-    if (!app.isPackaged) {
-      // don't throw; renderer shows friendly message via UPDATE_ERROR event
-      return { skipped: true, reason: 'not-packaged' }
-    }
+    // checkForUpdates() is responsible for handling dev/prod behavior and emitting a friendly error.
     return checkForUpdates()
   })
 
   safeHandle(IPC.UPDATE_DOWNLOAD, async () => {
-    const { app } = await import('electron')
-    if (!app.isPackaged) return { skipped: true, reason: 'not-packaged' }
     return downloadUpdate()
   })
 
   safeHandle(IPC.UPDATE_QUIT_INSTALL, async () => {
-    const { app } = await import('electron')
-    if (!app.isPackaged) return { skipped: true, reason: 'not-packaged' }
     return quitAndInstall()
   })
 
